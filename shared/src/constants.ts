@@ -77,3 +77,13 @@ export const TOWER_LOCATIONS = [
   { x: 1400, y: 1400, team: 2, name: "Torre Scourge Mid" },
   { x: 1900, y: 1900, team: 2, name: "Torre Scourge Bot" }
 ];
+
+export type GameMode = 'NORMAL' | 'TURN_BASED';
+
+export const TURN_RULES = {
+  MAX_AP: 2,         // Pontos de Ação (PA) por turno
+  MAX_MP: 3,         // Pontos de Movimento (PM) por turno
+  AP_COST_ABILITY: 1,
+  MP_COST_MOVE: 1,   // Custo de 1 PM por célula de grade percorrida
+};
+

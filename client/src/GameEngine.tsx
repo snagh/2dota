@@ -6,7 +6,19 @@ import { GAME_SETTINGS, getObstacleGrid, type Vector2D } from 'shared';
 interface GameEngineProps {
   socket: Socket | null;
   username: string;
-  onUpdatePlayerStats: (hp: number, maxHp: number, mp: number, maxMp: number, kills: number, deaths: number) => void;
+  onUpdatePlayerStats: (
+    hp: number,
+    maxHp: number,
+    mp: number,
+    maxMp: number,
+    kills: number,
+    deaths: number,
+    ap: number,
+    mpPoints: number,
+    serverMode: any,
+    activePlayerId: string | null,
+    isNpcTurn: boolean
+  ) => void;
 }
 
 export default function GameEngine({ socket, username, onUpdatePlayerStats }: GameEngineProps) {
@@ -190,7 +202,12 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
           localPlayer.mp,
           localPlayer.maxMp,
           localPlayer.kills,
-          localPlayer.deaths
+          localPlayer.deaths,
+          localPlayer.ap || 0,
+          localPlayer.mpPoints || 0,
+          state.gameMode || 'NORMAL',
+          state.activePlayerId || null,
+          state.isNpcTurn || false
         );
 
         // Suaviza a Câmera seguindo o jogador local
@@ -204,6 +221,24 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
 
       // Conjunto de IDs presentes neste tick para limpeza dos expirados
       const activeIds = new Set<string>();
+
+      // Desenha o círculo de alcance de PM (Modo Turno)
+      const rangeId = 'local_player_range';
+      let rangeGraphic = graphicsPool.get(rangeId);
+      if (!rangeGraphic) {
+        rangeGraphic = new PIXI.Graphics();
+        gridLayer.addChild(rangeGraphic);
+        graphicsPool.set(rangeId, rangeGraphic);
+      }
+      rangeGraphic.clear();
+      activeIds.add(rangeId);
+
+      if (state.gameMode === 'TURN_BASED' && localPlayer && state.activePlayerId === localPlayerId.current && localPlayer.mpPoints > 0) {
+        rangeGraphic.beginFill(0x8257e5, 0.08); // Roxo translúcido
+        rangeGraphic.lineStyle(1.5, 0x8257e5, 0.4);
+        rangeGraphic.drawCircle(localPlayer.x, localPlayer.y, localPlayer.mpPoints * GAME_SETTINGS.MAP.TILE_SIZE);
+        rangeGraphic.endFill();
+      }
 
       // Desenha a rota (caminho planejado A*) do jogador local
       const pathId = 'local_player_path';
