@@ -6,6 +6,7 @@ import {
   checkCircleCollision, 
   createVector, 
   normalize,
+  findPath,
   type Vector2D,
   type SkillshotProjectile 
 } from 'shared';
@@ -28,6 +29,7 @@ export interface ServerPlayer {
   };
   kills: number;
   deaths: number;
+  path: Vector2D[];
 }
 
 export interface ServerCreep {
@@ -143,18 +145,26 @@ export class GameRoom {
     const dt = (now - this.lastTickTime) / 1000; // Delta tempo em segundos
     this.lastTickTime = now;
 
-    // 1. Mover Jogadores
+    // 1. Mover Jogadores ao longo dos waypoints calculados pelo A*
     for (const player of this.players.values()) {
       if (player.hp <= 0) continue;
 
-      if (player.x !== player.targetX || player.y !== player.targetY) {
+      if (player.path && player.path.length > 0) {
+        const nextWaypoint = player.path[0];
         const maxDist = GAME_SETTINGS.PLAYER.SPEED * dt;
         const currentPos = { x: player.x, y: player.y };
-        const targetPos = { x: player.targetX, y: player.targetY };
         
-        const nextPos = moveTowards(currentPos, targetPos, maxDist);
+        const nextPos = moveTowards(currentPos, nextWaypoint, maxDist);
         player.x = nextPos.x;
         player.y = nextPos.y;
+
+        // Se chegou no waypoint intermediário, remove e avança
+        const distToWaypoint = Math.sqrt(
+          Math.pow(nextWaypoint.x - player.x, 2) + Math.pow(nextWaypoint.y - player.y, 2)
+        );
+        if (distToWaypoint < 4) {
+          player.path.shift();
+        }
       }
     }
 
@@ -198,6 +208,7 @@ export class GameRoom {
               target.targetY = target.y;
               target.hp = GAME_SETTINGS.PLAYER.BASE_HP;
               target.mp = GAME_SETTINGS.PLAYER.BASE_MP;
+              target.path = [];
             }
           }
         }
@@ -250,6 +261,7 @@ export class GameRoom {
               player.targetY = player.y;
               player.hp = GAME_SETTINGS.PLAYER.BASE_HP;
               player.mp = GAME_SETTINGS.PLAYER.BASE_MP;
+              player.path = [];
             }
             break;
           }
@@ -315,6 +327,7 @@ export class GameRoom {
             nearestEnemy.targetY = nearestEnemy.y;
             nearestEnemy.hp = GAME_SETTINGS.PLAYER.BASE_HP;
             nearestEnemy.mp = GAME_SETTINGS.PLAYER.BASE_MP;
+            nearestEnemy.path = [];
           }
         }
       }
@@ -365,7 +378,8 @@ export class GameRoom {
       team,
       cooldowns: { Q: 0, W: 0 },
       kills: 0,
-      deaths: 0
+      deaths: 0,
+      path: []
     };
 
     this.players.set(id, newPlayer);
@@ -387,8 +401,13 @@ export class GameRoom {
     if (!player || player.hp <= 0) return;
     
     // Limita o movimento às fronteiras do mapa
-    player.targetX = Math.max(0, Math.min(GAME_SETTINGS.MAP.WIDTH, x));
-    player.targetY = Math.max(0, Math.min(GAME_SETTINGS.MAP.HEIGHT, y));
+    const targetX = Math.max(0, Math.min(GAME_SETTINGS.MAP.WIDTH, x));
+    const targetY = Math.max(0, Math.min(GAME_SETTINGS.MAP.HEIGHT, y));
+    player.targetX = targetX;
+    player.targetY = targetY;
+
+    // Calcula a rota com o A*
+    player.path = findPath({ x: player.x, y: player.y }, { x: targetX, y: targetY });
   }
 
   /**

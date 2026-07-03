@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
 import { Socket } from 'socket.io-client';
-import { GAME_SETTINGS, type Vector2D } from 'shared';
+import { GAME_SETTINGS, getObstacleGrid, type Vector2D } from 'shared';
 
 interface GameEngineProps {
   socket: Socket | null;
@@ -92,6 +92,21 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     baseGraphics.lineStyle(4, 0xc62828, 0.7);
     baseGraphics.drawCircle(2250, 150, 180);
     mapDecorLayer.addChild(baseGraphics);
+
+    // Desenha a Grade de Obstáculos Estáticos (A* Obstacles)
+    const obstacleGrid = getObstacleGrid();
+    const obstacleGraphics = new PIXI.Graphics();
+    obstacleGraphics.beginFill(0x24242d, 0.45); // Cor de parede/obstáculo no mapa
+    obstacleGraphics.lineStyle(1, 0x1d1d26, 0.4);
+    for (let r = 0; r < obstacleGrid.length; r++) {
+      for (let c = 0; c < obstacleGrid[r].length; c++) {
+        if (obstacleGrid[r][c] === 1) {
+          obstacleGraphics.drawRect(c * tileSize, r * tileSize, tileSize, tileSize);
+        }
+      }
+    }
+    obstacleGraphics.endFill();
+    mapDecorLayer.addChild(obstacleGraphics);
 
     // 3. Gerenciadores gráficos de entidades dinâmicas
     const graphicsPool: Map<string, PIXI.Graphics> = new Map();
@@ -189,6 +204,34 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
 
       // Conjunto de IDs presentes neste tick para limpeza dos expirados
       const activeIds = new Set<string>();
+
+      // Desenha a rota (caminho planejado A*) do jogador local
+      const pathId = 'local_player_path';
+      let pathGraphic = graphicsPool.get(pathId);
+      if (!pathGraphic) {
+        pathGraphic = new PIXI.Graphics();
+        projectilesLayer.addChild(pathGraphic);
+        graphicsPool.set(pathId, pathGraphic);
+      }
+      pathGraphic.clear();
+      activeIds.add(pathId);
+
+      if (localPlayer && localPlayer.path && localPlayer.path.length > 0) {
+        pathGraphic.lineStyle(2, 0xffd200, 0.45); // Amarelo suave
+        pathGraphic.moveTo(localPlayer.x, localPlayer.y);
+        localPlayer.path.forEach((pt: any) => {
+          pathGraphic!.lineTo(pt.x, pt.y);
+        });
+        
+        // Desenha pequenas bolinhas nos waypoints
+        localPlayer.path.forEach((pt: any) => {
+          pathGraphic!.beginFill(0xffd200, 0.7);
+          pathGraphic!.drawCircle(pt.x, pt.y, 3);
+          pathGraphic!.endFill();
+        });
+      }
+
+
 
       // 6.1 RENDERIZAR JOGADORES
       state.players.forEach((player: any) => {
