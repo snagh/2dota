@@ -3,6 +3,7 @@ import { BaseRoom, type ServerPlayer } from './BaseRoom.js';
 import { 
   GAME_SETTINGS, 
   TURN_RULES, 
+  HERO_CATALOG,
   moveTowards, 
   checkCircleCollision, 
   normalize,
@@ -101,43 +102,90 @@ export class TurnBasedRoom extends BaseRoom {
       }
     }
 
-    // 2. Atualizar Projéteis
+    // 3. Atualizar Projéteis (Modo Turno)
     for (const [projId, proj] of this.projectiles.entries()) {
-      const stepDistance = proj.speed * dt;
-      proj.position.x += proj.direction.x * stepDistance;
-      proj.position.y += proj.direction.y * stepDistance;
-      proj.distanceTraveled += stepDistance;
-
       let destroyed = proj.distanceTraveled >= proj.maxRange;
 
-      // Colisão com Jogadores
-      if (!destroyed) {
-        for (const player of this.players.values()) {
-          if (player.id === proj.casterId || player.hp <= 0) continue;
+      if (proj.isAutoAttack && proj.targetId) {
+        const target = this.players.get(proj.targetId) || this.creeps.get(proj.targetId);
+        if (target && target.hp > 0) {
+          const dx = target.x - proj.position.x;
+          const dy = target.y - proj.position.y;
+          const distToTarget = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distToTarget > 0) {
+            proj.direction = { x: dx / distToTarget, y: dy / distToTarget };
+          }
 
-          const collides = checkCircleCollision(proj.position, proj.radius, player, GAME_SETTINGS.PLAYER.RADIUS);
-          if (collides) {
-            player.hp = Math.max(0, player.hp - proj.damage);
+          const stepDistance = proj.speed * dt;
+          proj.position.x += proj.direction.x * stepDistance;
+          proj.position.y += proj.direction.y * stepDistance;
+          proj.distanceTraveled += stepDistance;
+
+          const collisionDist = proj.radius + ('radius' in target ? target.radius : GAME_SETTINGS.PLAYER.RADIUS);
+          if (distToTarget <= collisionDist) {
+            target.hp = Math.max(0, target.hp - proj.damage);
             destroyed = true;
 
-            if (player.hp <= 0) {
-              const caster = this.players.get(proj.casterId);
-              if (caster) caster.kills++;
-              this.killPlayerInternal(player);
+            const caster = this.players.get(proj.casterId);
+            if (caster) {
+              this.io.emit('unit_attacked', {
+                attackerId: proj.casterId,
+                targetId: target.id,
+                damage: proj.damage
+              });
+
+              if (target.hp <= 0) {
+                this.handleUnitDeath(target, caster);
+              }
             }
-            break;
+          }
+        } else {
+          destroyed = true;
+        }
+      } else {
+        const stepDistance = proj.speed * dt;
+        proj.position.x += proj.direction.x * stepDistance;
+        proj.position.y += proj.direction.y * stepDistance;
+        proj.distanceTraveled += stepDistance;
+
+        // Colisão com Jogadores
+        if (!destroyed) {
+          for (const player of this.players.values()) {
+            if (player.id === proj.casterId || player.hp <= 0) continue;
+
+            const collides = checkCircleCollision(proj.position, proj.radius, player, GAME_SETTINGS.PLAYER.RADIUS);
+            if (collides) {
+              player.hp = Math.max(0, player.hp - proj.damage);
+              destroyed = true;
+
+              if (player.hp <= 0) {
+                const caster = this.players.get(proj.casterId);
+                if (caster) {
+                  this.handleUnitDeath(player, caster);
+                }
+              }
+              break;
+            }
           }
         }
-      }
 
-      // Colisão com Creeps
-      if (!destroyed) {
-        for (const creep of this.creeps.values()) {
-          const collides = checkCircleCollision(proj.position, proj.radius, creep, creep.radius);
-          if (collides) {
-            creep.hp = Math.max(0, creep.hp - proj.damage);
-            destroyed = true;
-            break;
+        // Colisão com Creeps
+        if (!destroyed) {
+          for (const creep of this.creeps.values()) {
+            const collides = checkCircleCollision(proj.position, proj.radius, creep, creep.radius);
+            if (collides) {
+              creep.hp = Math.max(0, creep.hp - proj.damage);
+              destroyed = true;
+
+              if (creep.hp <= 0) {
+                const caster = this.players.get(proj.casterId);
+                if (caster) {
+                  this.handleUnitDeath(creep, caster);
+                }
+              }
+              break;
+            }
           }
         }
       }
@@ -283,37 +331,170 @@ export class TurnBasedRoom extends BaseRoom {
   }
 
   /**
-   * Implementação da movimentação limitada por PM (Pontos de Movimento)
+   * Implementação da movimentação limitada por PM (Pontos de Movimento) ou Auto-Ataque com PA
    */
   public override movePlayer(id: string, x: number, y: number) {
     const activePlayerId = this.turnOrder[this.activePlayerIndex];
     if (id !== activePlayerId || this.isNpcTurn) return;
 
     const player = this.players.get(id);
-    if (!player || player.hp <= 0 || player.mpPoints <= 0) return;
+    if (!player || player.hp <= 0) return;
 
-    // Calcula rota completa com o A*
-    const startPos = { x: player.x, y: player.y };
-    const targetPos = { x, y };
-    const fullPath = findPath(startPos, targetPos);
+    // 1. Procura se há um alvo inimigo focado pelo clique
+    let targetUnit: any = null;
+    const clickRadius = 32;
 
-    if (fullPath.length === 0) return;
+    for (const creep of this.creeps.values()) {
+      if (creep.hp > 0 && Math.sqrt(Math.pow(creep.x - x, 2) + Math.pow(creep.y - y, 2)) < clickRadius) {
+        targetUnit = creep;
+        break;
+      }
+    }
 
-    // Trunca o caminho de acordo com os PMs restantes do jogador
-    const allowedSteps = Math.min(player.mpPoints, fullPath.length);
-    const truncatedPath = fullPath.slice(0, allowedSteps);
+    if (!targetUnit) {
+      for (const p of this.players.values()) {
+        if (p.id !== id && p.hp > 0 && p.team !== player.team && Math.sqrt(Math.pow(p.x - x, 2) + Math.pow(p.y - y, 2)) < clickRadius) {
+          targetUnit = p;
+          break;
+        }
+      }
+    }
 
-    // Salva o caminho truncado no player para animação do loop
-    player.path = truncatedPath;
-    
-    // Desconta os PMs consumidos
-    player.mpPoints -= allowedSteps;
+    if (targetUnit) {
+      const dist = Math.sqrt(Math.pow(targetUnit.x - player.x, 2) + Math.pow(targetUnit.y - player.y, 2));
+      
+      if (dist <= player.attackRange) {
+        // Ataque básico (Consome 1 PA)
+        if (player.ap >= 1) {
+          player.ap -= 1;
+          const heroDef = HERO_CATALOG[player.heroId || 'axe'];
+          const isRanged = heroDef?.isRanged || false;
 
-    // Define alvos virtuais de parada para sincronia
-    if (truncatedPath.length > 0) {
-      const finalPos = truncatedPath[truncatedPath.length - 1];
-      player.targetX = finalPos.x;
-      player.targetY = finalPos.y;
+          if (isRanged) {
+            // Ranged projectile
+            const projectileId = `proj_aa_${player.id}_${this.projectileIdCounter++}`;
+            const dirX = targetUnit.x - player.x;
+            const dirY = targetUnit.y - player.y;
+            const dirVec = normalize({ x: dirX, y: dirY });
+
+            let aaColor = 0xff5a1f;
+            if (heroDef) {
+              if (heroDef.attribute === 'STR') aaColor = 0xef4444;
+              else if (heroDef.attribute === 'AGI') aaColor = 0x10b981;
+              else if (heroDef.attribute === 'INT') aaColor = 0x3b82f6;
+            }
+
+            const newProjectile: SkillshotProjectile = {
+              id: projectileId,
+              casterId: player.id,
+              position: { x: player.x, y: player.y },
+              direction: dirVec,
+              speed: 600,
+              radius: 8,
+              damage: player.baseDamage,
+              distanceTraveled: 0,
+              maxRange: player.attackRange + 150,
+              targetId: targetUnit.id,
+              isAutoAttack: true,
+              color: aaColor
+            };
+
+            this.projectiles.set(projectileId, newProjectile);
+
+            this.io.emit('ability_casted', {
+              casterId: player.id,
+              key: 'AA',
+              projectileId,
+              position: { x: player.x, y: player.y },
+              direction: dirVec,
+              color: aaColor
+            });
+
+          } else {
+            // Melee instant damage
+            targetUnit.hp = Math.max(0, targetUnit.hp - player.baseDamage);
+
+            this.io.emit('unit_attacked', {
+              attackerId: player.id,
+              targetId: targetUnit.id,
+              damage: player.baseDamage,
+              melee: true
+            });
+
+            if (targetUnit.hp <= 0) {
+              this.handleUnitDeath(targetUnit, player);
+            }
+          }
+        }
+        return;
+      } else {
+        // Fora do alcance, move o jogador o mais perto possível usando A*
+        if (player.mpPoints <= 0) return;
+        const startPos = { x: player.x, y: player.y };
+        const fullPath = findPath(startPos, { x: targetUnit.x, y: targetUnit.y });
+        if (fullPath.length === 0) return;
+
+        const allowedSteps = Math.min(player.mpPoints, fullPath.length);
+        const truncatedPath = fullPath.slice(0, allowedSteps);
+
+        player.path = truncatedPath;
+        player.mpPoints -= allowedSteps;
+
+        if (truncatedPath.length > 0) {
+          const finalPos = truncatedPath[truncatedPath.length - 1];
+          player.targetX = finalPos.x;
+          player.targetY = finalPos.y;
+        }
+      }
+    } else {
+      // Movimentação normal sem alvo
+      if (player.mpPoints <= 0) return;
+      const startPos = { x: player.x, y: player.y };
+      const fullPath = findPath(startPos, { x, y });
+      if (fullPath.length === 0) return;
+
+      const allowedSteps = Math.min(player.mpPoints, fullPath.length);
+      const truncatedPath = fullPath.slice(0, allowedSteps);
+
+      player.path = truncatedPath;
+      player.mpPoints -= allowedSteps;
+
+      if (truncatedPath.length > 0) {
+        const finalPos = truncatedPath[truncatedPath.length - 1];
+        player.targetX = finalPos.x;
+        player.targetY = finalPos.y;
+      }
+    }
+  }
+
+  private handleUnitDeath(deadUnit: any, killer: ServerPlayer) {
+    if (deadUnit.id.includes('creep')) {
+      this.creeps.delete(deadUnit.id);
+      
+      const shareRadius = 400;
+      const nearbyPlayers = Array.from(this.players.values()).filter(
+        p => p.hp > 0 && Math.sqrt(Math.pow(p.x - deadUnit.x, 2) + Math.pow(p.y - deadUnit.y, 2)) < shareRadius
+      );
+      if (nearbyPlayers.length > 0) {
+        const xpPerPlayer = Math.ceil(50 / nearbyPlayers.length);
+        nearbyPlayers.forEach(p => {
+          this.addXp(p.id, xpPerPlayer);
+        });
+      }
+    } else {
+      killer.kills++;
+      this.killPlayerInternal(deadUnit);
+
+      const shareRadius = 400;
+      const nearbyAllyPlayers = Array.from(this.players.values()).filter(
+        p => p.hp > 0 && p.team === killer.team && Math.sqrt(Math.pow(p.x - deadUnit.x, 2) + Math.pow(p.y - deadUnit.y, 2)) < shareRadius
+      );
+      if (nearbyAllyPlayers.length > 0) {
+        const xpPerPlayer = Math.ceil(200 / nearbyAllyPlayers.length);
+        nearbyAllyPlayers.forEach(p => {
+          this.addXp(p.id, xpPerPlayer);
+        });
+      }
     }
   }
 

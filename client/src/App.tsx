@@ -25,6 +25,11 @@ export default function App() {
   const [playerAp, setPlayerAp] = useState(2);
   const [playerMpPoints, setPlayerMpPoints] = useState(3);
 
+  // Status de Nível e XP
+  const [playerLevel, setPlayerLevel] = useState(1);
+  const [playerXp, setPlayerXp] = useState(0);
+  const [playerMaxXp, setPlayerMaxXp] = useState(100);
+
   // Estados do Modo Turno
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
   const [isNpcTurn, setIsNpcTurn] = useState(false);
@@ -77,7 +82,10 @@ export default function App() {
     mpPoints: number,
     serverMode: GameMode,
     serverActivePlayerId: string | null,
-    serverIsNpcTurn: boolean
+    serverIsNpcTurn: boolean,
+    level: number,
+    xp: number,
+    maxXp: number
   ) => {
     setPlayerHp(hp);
     setPlayerMaxHp(maxHp);
@@ -90,6 +98,9 @@ export default function App() {
     setGameMode(serverMode);
     setActivePlayerId(serverActivePlayerId);
     setIsNpcTurn(serverIsNpcTurn);
+    setPlayerLevel(level);
+    setPlayerXp(xp);
+    setPlayerMaxXp(maxXp);
   };
 
   const handleEndTurn = () => {
@@ -311,7 +322,7 @@ export default function App() {
           <div className="h-3.5 w-3.5 bg-shonen-primary rounded-full animate-pulse shadow-glow" />
           <div>
             <h2 className="font-bold text-sm text-zinc-200 uppercase tracking-wide">
-              {username} <span className="text-xs text-zinc-400 font-normal">({activeHero.name})</span>
+              [Nv. {playerLevel}] {username} <span className="text-xs text-zinc-400 font-normal">({activeHero.name})</span>
             </h2>
             <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider">
               {gameMode === 'TURN_BASED' ? '⏳ Modo Turno Tático' : '⚔️ Modo Tempo Real (30Hz)'}
@@ -358,6 +369,20 @@ export default function App() {
               <div 
                 className="bg-gradient-to-r from-blue-600 to-sky-500 h-full transition-all duration-150"
                 style={{ width: `${mpPercentage}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Barra de XP */}
+          <div>
+            <div className="flex justify-between items-center text-xs font-bold text-zinc-300 mb-1">
+              <span>XP (Experiência)</span>
+              <span>{playerXp} / {playerMaxXp}</span>
+            </div>
+            <div className="w-full bg-zinc-900 h-2.5 rounded-full overflow-hidden border border-zinc-800">
+              <div 
+                className="bg-gradient-to-r from-amber-500 to-yellow-400 h-full transition-all duration-150"
+                style={{ width: `${Math.max(0, (playerXp / playerMaxXp) * 100)}%` }}
               />
             </div>
           </div>

@@ -17,7 +17,10 @@ interface GameEngineProps {
     mpPoints: number,
     serverMode: any,
     activePlayerId: string | null,
-    isNpcTurn: boolean
+    isNpcTurn: boolean,
+    level: number,
+    xp: number,
+    maxXp: number
   ) => void;
 }
 
@@ -59,17 +62,18 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     const worldContainer = new PIXI.Container();
     app.stage.addChild(worldContainer);
 
-    // Contêineres ordenados por Z-index para desenho correto das camadas
     const gridLayer = new PIXI.Container();
     const mapDecorLayer = new PIXI.Container();
     const entitiesLayer = new PIXI.Container();
     const projectilesLayer = new PIXI.Container();
+    const fxLayer = new PIXI.Container();
     const uiLayer = new PIXI.Container();
 
     worldContainer.addChild(gridLayer);
     worldContainer.addChild(mapDecorLayer);
     worldContainer.addChild(entitiesLayer);
     worldContainer.addChild(projectilesLayer);
+    worldContainer.addChild(fxLayer);
     worldContainer.addChild(uiLayer);
 
     // Desenha o Grid de Fundo do Mapa
@@ -120,13 +124,47 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     obstacleGraphics.endFill();
     mapDecorLayer.addChild(obstacleGraphics);
 
-    // 3. Gerenciadores gráficos de entidades dinâmicas
+    // 3. Gerenciadores gráficos de entidades dinâmicas e efeitos visuais
     const graphicsPool: Map<string, PIXI.Graphics> = new Map();
     const textPool: Map<string, PIXI.Text> = new Map();
+    const visualEffects: any[] = [];
 
-    // 4. Receber Estado do Servidor
+    // 4. Receber Estado do Servidor e Eventos de Combate
     socket.on('game_state', (state: any) => {
       gameStateRef.current = state;
+    });
+
+    socket.on('level_up', (data: { playerId: string; level: number; maxHp: number; maxMp: number }) => {
+      const state = gameStateRef.current;
+      if (!state) return;
+      const p = state.players.find((x: any) => x.id === data.playerId);
+      if (p) {
+        visualEffects.push({
+          type: 'LEVEL_UP',
+          x: p.x,
+          y: p.y,
+          targetId: data.playerId,
+          createdAt: Date.now(),
+          duration: 1000
+        });
+      }
+    });
+
+    socket.on('unit_attacked', (data: { attackerId: string; targetId: string; damage: number; melee?: boolean }) => {
+      if (data.melee) {
+        const state = gameStateRef.current;
+        if (!state) return;
+        const target = state.players.find((x: any) => x.id === data.targetId) || state.creeps.find((x: any) => x.id === data.targetId);
+        if (target) {
+          visualEffects.push({
+            type: 'MELEE_SLASH',
+            x: target.x,
+            y: target.y,
+            createdAt: Date.now(),
+            duration: 150
+          });
+        }
+      }
     });
 
     // 5. Escutar inputs de mouse e teclado
@@ -214,7 +252,10 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
           localPlayer.mpPoints || 0,
           state.gameMode || 'NORMAL',
           state.activePlayerId || null,
-          state.isNpcTurn || false
+          state.isNpcTurn || false,
+          localPlayer.level || 1,
+          localPlayer.xp || 0,
+          localPlayer.maxXp || 100
         );
 
         // Suaviza a Câmera seguindo o jogador local
@@ -463,7 +504,64 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
         g.endFill();
       });
 
-      // 6.5 LIMPAR GRÁFICOS NÃO ATIVOS
+      // 6.5 Renderizar Efeitos Visuais (Level Up & Slash)
+      fxLayer.removeChildren();
+      const fxGraphics = new PIXI.Graphics();
+      fxLayer.addChild(fxGraphics);
+
+      const nowMs = Date.now();
+      for (let i = visualEffects.length - 1; i >= 0; i--) {
+        const fx = visualEffects[i];
+        const elapsed = nowMs - fx.createdAt;
+        if (elapsed >= fx.duration) {
+          const txt = textPool.get(fx.targetId + '_lvlup_txt');
+          if (txt) {
+            txt.destroy();
+            textPool.delete(fx.targetId + '_lvlup_txt');
+          }
+          visualEffects.splice(i, 1);
+          continue;
+        }
+
+        const progress = elapsed / fx.duration;
+
+        if (fx.type === 'LEVEL_UP') {
+          const player = state.players.find((p: any) => p.id === fx.targetId);
+          const posX = player ? player.x : fx.x;
+          const posY = player ? player.y : fx.y;
+
+          const radius = 24 + progress * 50;
+          const alpha = 1 - progress;
+          fxGraphics.lineStyle(3, 0x22c55e, alpha);
+          fxGraphics.drawCircle(posX, posY, radius);
+
+          let lvText = textPool.get(fx.targetId + '_lvlup_txt');
+          if (!lvText) {
+            lvText = new PIXI.Text('+1 LEVEL!', {
+              fontFamily: 'Space Grotesk',
+              fontSize: 14,
+              fontWeight: 'bold',
+              fill: 0xfacc15,
+              stroke: 0x000000,
+              strokeThickness: 3,
+            });
+            lvText.anchor.set(0.5);
+            uiLayer.addChild(lvText);
+            textPool.set(fx.targetId + '_lvlup_txt', lvText);
+          }
+          lvText.position.set(posX, posY - 45 - progress * 40);
+          lvText.alpha = alpha;
+        } else if (fx.type === 'MELEE_SLASH') {
+          const alpha = 1 - progress;
+          fxGraphics.lineStyle(4, 0xef4444, alpha);
+          fxGraphics.moveTo(fx.x - 20, fx.y - 20);
+          fxGraphics.lineTo(fx.x + 20, fx.y + 20);
+          fxGraphics.moveTo(fx.x + 20, fx.y - 20);
+          fxGraphics.lineTo(fx.x - 20, fx.y + 20);
+        }
+      }
+
+      // 6.6 LIMPAR GRÁFICOS NÃO ATIVOS
       for (const [key, g] of graphicsPool.entries()) {
         if (!activeIds.has(key)) {
           g.destroy();
@@ -473,13 +571,15 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
 
       for (const [key, t] of textPool.entries()) {
         const cleanKey = key.replace('_text', '');
+        // Evita remover o texto de level up enquanto a animação está rodando
+        if (key.includes('_lvlup_txt')) continue;
         if (!activeIds.has(cleanKey)) {
           t.destroy();
           textPool.delete(key);
         }
       }
 
-      // 6.6 Atualiza Cooldowns locais na UI do React
+      // 6.7 Atualiza Cooldowns locais na UI do React
       const now = Date.now();
       setQCooldown(Math.max(0, Math.ceil((qReadyTime - now) / 1000)));
       setWCooldown(Math.max(0, Math.ceil((wReadyTime - now) / 1000)));
@@ -492,6 +592,8 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       window.removeEventListener('keydown', handleWindowKeyDown);
       
       socket.off('game_state');
+      socket.off('level_up');
+      socket.off('unit_attacked');
       
       if (appRef.current) {
         appRef.current.destroy(true, { children: true, texture: true, baseTexture: true });

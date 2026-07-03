@@ -36,6 +36,13 @@ export interface ServerPlayer {
   maxAp: number;
   mpPoints: number; // Movement Points (Pontos de Movimento)
   maxMpPoints: number;
+
+  // Atributos de Progressão (Nível e XP)
+  level: number;
+  xp: number;
+  maxXp: number;
+  attackRange: number;
+  baseDamage: number;
 }
 
 export interface ServerCreep {
@@ -167,7 +174,13 @@ export abstract class BaseRoom {
       ap: 2,
       maxAp: 2,
       mpPoints: 3,
-      maxMpPoints: 3
+      maxMpPoints: 3,
+      // Atributos de Progressão
+      level: 1,
+      xp: 0,
+      maxXp: 100,
+      attackRange: heroDef.baseAttackRange,
+      baseDamage: 50
     };
 
     this.players.set(id, newPlayer);
@@ -205,19 +218,69 @@ export abstract class BaseRoom {
    * Respawna jogador morto
    */
   public killPlayerInternal(player: ServerPlayer) {
-    const heroDef = HERO_CATALOG[player.heroId || 'axe'];
     player.deaths++;
     player.x = player.team === 1 ? 150 : 2250;
     player.y = player.team === 1 ? 2250 : 150;
     player.targetX = player.x;
     player.targetY = player.y;
-    player.hp = heroDef.baseHp;
-    player.mp = heroDef.baseMp;
+    player.hp = player.maxHp;
+    player.mp = player.maxMp;
     player.path = [];
     player.targetId = null;
     if (this.roomName === 'turn_based') {
       player.ap = 0;
       player.mpPoints = 0;
+    }
+  }
+
+  /**
+   * Concede XP ao jogador e processa o Level Up
+   */
+  public addXp(playerId: string, amount: number): void {
+    const player = this.players.get(playerId);
+    if (!player || player.hp <= 0) return;
+
+    player.xp += amount;
+    const heroDef = HERO_CATALOG[player.heroId] || HERO_CATALOG.axe;
+
+    // Loop de level-up (caso ganhe XP suficiente para subir vários níveis)
+    let leveledUp = false;
+    while (player.xp >= player.maxXp) {
+      player.level++;
+      player.xp -= player.maxXp;
+      player.maxXp = player.level * 100;
+      leveledUp = true;
+
+      // Ganho de atributos por nível com base no tipo de herói
+      if (heroDef.attribute === 'STR') {
+        player.maxHp += 100;
+        player.maxMp += 30;
+        player.baseDamage += 6;
+        player.attackRange += (heroDef.isRanged ? 10 : 2);
+      } else if (heroDef.attribute === 'AGI') {
+        player.maxHp += 60;
+        player.maxMp += 40;
+        player.baseDamage += 8;
+        player.attackRange += (heroDef.isRanged ? 15 : 2);
+      } else { // INT
+        player.maxHp += 45;
+        player.maxMp += 80;
+        player.baseDamage += 5;
+        player.attackRange += (heroDef.isRanged ? 10 : 2);
+      }
+    }
+
+    if (leveledUp) {
+      // Cura completamente na subida de nível
+      player.hp = player.maxHp;
+      player.mp = player.maxMp;
+
+      this.io.emit('level_up', {
+        playerId: player.id,
+        level: player.level,
+        maxHp: player.maxHp,
+        maxMp: player.maxMp
+      });
     }
   }
 

@@ -2,6 +2,7 @@ import { Server } from 'socket.io';
 import { BaseRoom, type ServerPlayer } from './BaseRoom.js';
 import { 
   GAME_SETTINGS, 
+  HERO_CATALOG,
   moveTowards, 
   checkCircleCollision, 
   normalize,
@@ -46,30 +47,71 @@ export class RealTimeRoom extends BaseRoom {
 
         if (targetUnit && targetUnit.hp > 0) {
           const distToTarget = this.getDistance(player, targetUnit);
+          const heroDef = HERO_CATALOG[player.heroId || 'axe'];
+          const isRanged = heroDef?.isRanged || false;
 
-          // Alcance de auto-ataque = 60 pixels
-          if (distToTarget <= 60) {
+          if (distToTarget <= player.attackRange) {
             player.path = []; // Para de andar
             
             // Ataca se o cooldown de 1.0s tiver expirado
             if (now - player.lastAttackTime > 1000) {
-              targetUnit.hp = Math.max(0, targetUnit.hp - 40); // 40 de dano de ataque básico
               player.lastAttackTime = now;
 
-              this.io.emit('unit_attacked', {
-                attackerId: player.id,
-                targetId: targetUnit.id,
-                damage: 40
-              });
+              if (isRanged) {
+                // Ranged: Cria um projétil de auto-ataque guiado
+                const projectileId = `proj_aa_${player.id}_${this.projectileIdCounter++}`;
+                const dirX = targetUnit.x - player.x;
+                const dirY = targetUnit.y - player.y;
+                const dirVec = normalize({ x: dirX, y: dirY });
 
-              if (targetUnit.hp <= 0) {
-                if (targetUnit.id.includes('creep')) {
-                  this.creeps.delete(targetUnit.id);
-                } else {
-                  player.kills++;
-                  this.killPlayerInternal(targetUnit);
+                let aaColor = 0xff5a1f;
+                if (heroDef) {
+                  if (heroDef.attribute === 'STR') aaColor = 0xef4444;
+                  else if (heroDef.attribute === 'AGI') aaColor = 0x10b981;
+                  else if (heroDef.attribute === 'INT') aaColor = 0x3b82f6;
                 }
-                player.targetId = null; // Alvo morreu
+
+                const newProjectile: SkillshotProjectile = {
+                  id: projectileId,
+                  casterId: player.id,
+                  position: { x: player.x, y: player.y },
+                  direction: dirVec,
+                  speed: 600,
+                  radius: 8,
+                  damage: player.baseDamage,
+                  distanceTraveled: 0,
+                  maxRange: player.attackRange + 150,
+                  targetId: targetUnit.id,
+                  isAutoAttack: true,
+                  color: aaColor
+                };
+
+                this.projectiles.set(projectileId, newProjectile);
+
+                this.io.emit('ability_casted', {
+                  casterId: player.id,
+                  key: 'AA',
+                  projectileId,
+                  position: { x: player.x, y: player.y },
+                  direction: dirVec,
+                  color: aaColor
+                });
+
+              } else {
+                // Melee: Causa dano instantâneo
+                targetUnit.hp = Math.max(0, targetUnit.hp - player.baseDamage);
+
+                this.io.emit('unit_attacked', {
+                  attackerId: player.id,
+                  targetId: targetUnit.id,
+                  damage: player.baseDamage,
+                  melee: true
+                });
+
+                if (targetUnit.hp <= 0) {
+                  this.handleUnitDeath(targetUnit, player);
+                  player.targetId = null;
+                }
               }
             }
           } else {
@@ -77,7 +119,7 @@ export class RealTimeRoom extends BaseRoom {
             player.path = findPath({ x: player.x, y: player.y }, { x: targetUnit.x, y: targetUnit.y });
           }
         } else {
-          player.targetId = null; // Alvo inválido ou já morto
+          player.targetId = null;
         }
       }
 
@@ -147,41 +189,88 @@ export class RealTimeRoom extends BaseRoom {
 
     // 3. Atualizar Projéteis
     for (const [projId, proj] of this.projectiles.entries()) {
-      const stepDistance = proj.speed * dt;
-      proj.position.x += proj.direction.x * stepDistance;
-      proj.position.y += proj.direction.y * stepDistance;
-      proj.distanceTraveled += stepDistance;
-
       let destroyed = proj.distanceTraveled >= proj.maxRange;
 
-      // Colisão com Jogadores
-      if (!destroyed) {
-        for (const player of this.players.values()) {
-          if (player.id === proj.casterId || player.hp <= 0) continue;
+      if (proj.isAutoAttack && proj.targetId) {
+        const target = this.players.get(proj.targetId) || this.creeps.get(proj.targetId);
+        if (target && target.hp > 0) {
+          const dx = target.x - proj.position.x;
+          const dy = target.y - proj.position.y;
+          const distToTarget = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distToTarget > 0) {
+            proj.direction = { x: dx / distToTarget, y: dy / distToTarget };
+          }
 
-          const collides = checkCircleCollision(proj.position, proj.radius, player, GAME_SETTINGS.PLAYER.RADIUS);
-          if (collides) {
-            player.hp = Math.max(0, player.hp - proj.damage);
+          const stepDistance = proj.speed * dt;
+          proj.position.x += proj.direction.x * stepDistance;
+          proj.position.y += proj.direction.y * stepDistance;
+          proj.distanceTraveled += stepDistance;
+
+          const collisionDist = proj.radius + ('radius' in target ? target.radius : GAME_SETTINGS.PLAYER.RADIUS);
+          if (distToTarget <= collisionDist) {
+            target.hp = Math.max(0, target.hp - proj.damage);
             destroyed = true;
 
-            if (player.hp <= 0) {
-              const caster = this.players.get(proj.casterId);
-              if (caster) caster.kills++;
-              this.killPlayerInternal(player);
+            const caster = this.players.get(proj.casterId);
+            if (caster) {
+              this.io.emit('unit_attacked', {
+                attackerId: proj.casterId,
+                targetId: target.id,
+                damage: proj.damage
+              });
+
+              if (target.hp <= 0) {
+                this.handleUnitDeath(target, caster);
+              }
             }
-            break;
+          }
+        } else {
+          destroyed = true;
+        }
+      } else {
+        const stepDistance = proj.speed * dt;
+        proj.position.x += proj.direction.x * stepDistance;
+        proj.position.y += proj.direction.y * stepDistance;
+        proj.distanceTraveled += stepDistance;
+
+        // Colisão com Jogadores
+        if (!destroyed) {
+          for (const player of this.players.values()) {
+            if (player.id === proj.casterId || player.hp <= 0) continue;
+
+            const collides = checkCircleCollision(proj.position, proj.radius, player, GAME_SETTINGS.PLAYER.RADIUS);
+            if (collides) {
+              player.hp = Math.max(0, player.hp - proj.damage);
+              destroyed = true;
+
+              if (player.hp <= 0) {
+                const caster = this.players.get(proj.casterId);
+                if (caster) {
+                  this.handleUnitDeath(player, caster);
+                }
+              }
+              break;
+            }
           }
         }
-      }
 
-      // Colisão com Creeps
-      if (!destroyed) {
-        for (const creep of this.creeps.values()) {
-          const collides = checkCircleCollision(proj.position, proj.radius, creep, creep.radius);
-          if (collides) {
-            creep.hp = Math.max(0, creep.hp - proj.damage);
-            destroyed = true;
-            break;
+        // Colisão com Creeps
+        if (!destroyed) {
+          for (const creep of this.creeps.values()) {
+            const collides = checkCircleCollision(proj.position, proj.radius, creep, creep.radius);
+            if (collides) {
+              creep.hp = Math.max(0, creep.hp - proj.damage);
+              destroyed = true;
+
+              if (creep.hp <= 0) {
+                const caster = this.players.get(proj.casterId);
+                if (caster) {
+                  this.handleUnitDeath(creep, caster);
+                }
+              }
+              break;
+            }
           }
         }
       }
@@ -289,6 +378,37 @@ export class RealTimeRoom extends BaseRoom {
   }
 
 
+
+  private handleUnitDeath(deadUnit: any, killer: ServerPlayer) {
+    if (deadUnit.id.includes('creep')) {
+      this.creeps.delete(deadUnit.id);
+      
+      const shareRadius = 400;
+      const nearbyPlayers = Array.from(this.players.values()).filter(
+        p => p.hp > 0 && Math.sqrt(Math.pow(p.x - deadUnit.x, 2) + Math.pow(p.y - deadUnit.y, 2)) < shareRadius
+      );
+      if (nearbyPlayers.length > 0) {
+        const xpPerPlayer = Math.ceil(50 / nearbyPlayers.length);
+        nearbyPlayers.forEach(p => {
+          this.addXp(p.id, xpPerPlayer);
+        });
+      }
+    } else {
+      killer.kills++;
+      this.killPlayerInternal(deadUnit);
+
+      const shareRadius = 400;
+      const nearbyAllyPlayers = Array.from(this.players.values()).filter(
+        p => p.hp > 0 && p.team === killer.team && Math.sqrt(Math.pow(p.x - deadUnit.x, 2) + Math.pow(p.y - deadUnit.y, 2)) < shareRadius
+      );
+      if (nearbyAllyPlayers.length > 0) {
+        const xpPerPlayer = Math.ceil(200 / nearbyAllyPlayers.length);
+        nearbyAllyPlayers.forEach(p => {
+          this.addXp(p.id, xpPerPlayer);
+        });
+      }
+    }
+  }
 
   private getDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
     const dx = b.x - a.x;

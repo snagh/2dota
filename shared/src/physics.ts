@@ -70,6 +70,9 @@ export interface SkillshotProjectile {
   damage: number;
   distanceTraveled: number;
   maxRange: number;
+  targetId?: string | null;
+  isAutoAttack?: boolean;
+  color?: number;
 }
 
 /**
