@@ -42,17 +42,17 @@ app.get('/health', (req, res) => {
 io.on('connection', (socket: Socket) => {
   console.log(`Conectado: ${socket.id}`);
 
-  // 1. Jogador entra no jogo especificando o modo
-  socket.on('join_game', (data: { username: string; mode: GameMode }) => {
+  // 1. Jogador entra no jogo especificando o modo e o herói escolhido
+  socket.on('join_game', (data: { username: string; mode: GameMode; heroId?: string }) => {
     const isTurn = data.mode === 'TURN_BASED';
     const selectedRoom = isTurn ? turnRoom : normalRoom;
 
-    const newPlayer = selectedRoom.addPlayer(socket.id, data.username);
+    const newPlayer = selectedRoom.addPlayer(socket.id, data.username, data.heroId);
     socketRooms.set(socket.id, selectedRoom);
 
     socket.emit('joined_successfully', newPlayer);
     console.log(
-      `${newPlayer.username} entrou no Modo ${isTurn ? 'Turno' : 'Normal'} (Time: ${
+      `${newPlayer.username} entrou no Modo ${isTurn ? 'Turno' : 'Normal'} (Herói: ${newPlayer.heroId}, Time: ${
         newPlayer.team === 1 ? 'Sentinel' : 'Scourge'
       })`
     );

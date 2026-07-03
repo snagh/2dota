@@ -67,7 +67,7 @@ export class RealTimeRoom extends BaseRoom {
                   this.creeps.delete(targetUnit.id);
                 } else {
                   player.kills++;
-                  this.killPlayer(targetUnit);
+                  this.killPlayerInternal(targetUnit);
                 }
                 player.targetId = null; // Alvo morreu
               }
@@ -132,7 +132,7 @@ export class RealTimeRoom extends BaseRoom {
           if (Math.random() < 0.05) {
             target.hp = Math.max(0, target.hp - GAME_SETTINGS.CREEPS.DAMAGE);
             if (target.hp <= 0) {
-              this.killPlayer(target);
+              this.killPlayerInternal(target);
             }
           }
         }
@@ -167,7 +167,7 @@ export class RealTimeRoom extends BaseRoom {
             if (player.hp <= 0) {
               const caster = this.players.get(proj.casterId);
               if (caster) caster.kills++;
-              this.killPlayer(player);
+              this.killPlayerInternal(player);
             }
             break;
           }
@@ -233,7 +233,7 @@ export class RealTimeRoom extends BaseRoom {
             if (target.id.includes('creep')) {
               this.creeps.delete(target.id);
             } else {
-              this.killPlayer(target);
+              this.killPlayerInternal(target);
             }
           }
         }
@@ -244,20 +244,7 @@ export class RealTimeRoom extends BaseRoom {
     this.sendGameState('NORMAL');
   }
 
-  /**
-   * Respawna o jogador morto na respectiva base
-   */
-  private killPlayer(player: ServerPlayer) {
-    player.deaths++;
-    player.x = player.team === 1 ? 150 : 2250;
-    player.y = player.team === 1 ? 2250 : 150;
-    player.targetX = player.x;
-    player.targetY = player.y;
-    player.hp = GAME_SETTINGS.PLAYER.BASE_HP;
-    player.mp = GAME_SETTINGS.PLAYER.BASE_MP;
-    player.path = [];
-    player.targetId = null;
-  }
+
 
   /**
    * Define o destino do jogador na movimentação A*
@@ -301,49 +288,7 @@ export class RealTimeRoom extends BaseRoom {
     }
   }
 
-  /**
-   * Dispara um skillshot em tempo real
-   */
-  public override castAbility(id: string, key: 'Q' | 'W', targetX: number, targetY: number) {
-    const player = this.players.get(id);
-    if (!player || player.hp <= 0) return;
 
-    const now = Date.now();
-    const config = GAME_SETTINGS.ABILITIES[key];
-
-    if (now < player.cooldowns[key]) return;
-    if (player.mp < config.MANA_COST) return;
-
-    player.mp -= config.MANA_COST;
-    player.cooldowns[key] = now + config.COOLDOWN * 1000;
-
-    const directionX = targetX - player.x;
-    const directionY = targetY - player.y;
-    const dirVec = normalize({ x: directionX, y: directionY });
-
-    const projectileId = `proj_${id}_${key}_${this.projectileIdCounter++}`;
-    const newProjectile: SkillshotProjectile = {
-      id: projectileId,
-      casterId: id,
-      position: { x: player.x, y: player.y },
-      direction: dirVec,
-      speed: config.SPEED,
-      radius: config.RADIUS,
-      damage: config.DAMAGE,
-      distanceTraveled: 0,
-      maxRange: config.RANGE
-    };
-
-    this.projectiles.set(projectileId, newProjectile);
-
-    this.io.emit('ability_casted', {
-      casterId: id,
-      key,
-      projectileId,
-      position: { x: player.x, y: player.y },
-      direction: dirVec
-    });
-  }
 
   private getDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
     const dx = b.x - a.x;

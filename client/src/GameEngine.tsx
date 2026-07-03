@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
 import { Socket } from 'socket.io-client';
-import { GAME_SETTINGS, getObstacleGrid, type Vector2D } from 'shared';
+import { GAME_SETTINGS, HERO_CATALOG, getObstacleGrid, type Vector2D } from 'shared';
 
 interface GameEngineProps {
   socket: Socket | null;
@@ -173,12 +173,19 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
 
         socket.emit('cast_ability', { key, x: worldX, y: worldY });
 
-        // Aplica o cooldown visual local
-        const cd = GAME_SETTINGS.ABILITIES[key].COOLDOWN;
-        if (key === 'Q') {
-          qReadyTime = now + cd * 1000;
-        } else {
-          wReadyTime = now + cd * 1000;
+        // Aplica o cooldown visual local dinâmico
+        const state = gameStateRef.current;
+        if (state) {
+          const localPlayer = state.players.find((p: any) => p.id === localPlayerId.current);
+          if (localPlayer) {
+            const heroDef = HERO_CATALOG[localPlayer.heroId || 'axe'];
+            const cd = heroDef.abilities[key].cooldown;
+            if (key === 'Q') {
+              qReadyTime = now + cd * 1000;
+            } else {
+              wReadyTime = now + cd * 1000;
+            }
+          }
         }
       }
     };
@@ -283,18 +290,23 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
         // Limpa e redesenha o círculo do herói
         g.clear();
         
-        // Cores: Sentinel = Verde/Azul, Scourge = Vermelho
         const isSelf = id === localPlayerId.current;
-        const color = isSelf ? 0xffd200 : (player.team === 1 ? 0x4ade80 : 0xef4444);
+        const heroDef = HERO_CATALOG[player.heroId];
+        let attributeColor = 0xa855f7; // Roxo padrão
+        if (heroDef) {
+          if (heroDef.attribute === 'STR') attributeColor = 0xef4444; // Vermelho
+          else if (heroDef.attribute === 'AGI') attributeColor = 0x10b981; // Verde
+          else if (heroDef.attribute === 'INT') attributeColor = 0x3b82f6; // Azul
+        }
         
         // Sombra de brilho sob o herói
-        g.beginFill(color, 0.15);
+        g.beginFill(attributeColor, 0.15);
         g.drawCircle(player.x, player.y, GAME_SETTINGS.PLAYER.RADIUS + 6);
         g.endFill();
 
         // Círculo principal
-        g.beginFill(color);
-        g.lineStyle(2, 0xffffff, 0.8);
+        g.beginFill(attributeColor);
+        g.lineStyle(2.5, player.team === 1 ? 0x22c55e : 0xe11d48, 0.95);
         g.drawCircle(player.x, player.y, GAME_SETTINGS.PLAYER.RADIUS);
         g.endFill();
 
@@ -316,8 +328,11 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
 
         // Nome de jogador por cima
         let t = textPool.get(id + '_text');
+        const heroName = heroDef ? heroDef.name : 'Hero';
+        const displayName = `${player.username} (${heroName})`;
+
         if (!t) {
-          t = new PIXI.Text(player.username, {
+          t = new PIXI.Text(displayName, {
             fontFamily: 'Space Grotesk',
             fontSize: 12,
             fill: 0xffffff,
@@ -328,7 +343,7 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
           textPool.set(id + '_text', t);
         }
         t.position.set(player.x, player.y - GAME_SETTINGS.PLAYER.RADIUS - 26);
-        t.text = player.username;
+        t.text = displayName;
         t.alpha = player.hp <= 0 ? 0.3 : 1;
       });
 
@@ -437,12 +452,13 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
         }
 
         g.clear();
-        // Brilho do projétil (laranja semi-transparente)
-        g.beginFill(0xff5a1f, 0.4);
+        // Brilho do projétil
+        const projColor = proj.color || 0xffd200;
+        g.beginFill(projColor, 0.4);
         g.drawCircle(proj.position.x, proj.position.y, proj.radius + 4);
         g.endFill();
-        // Centro do projétil (amarelo)
-        g.beginFill(0xffd200);
+        // Centro do projétil
+        g.beginFill(0xffffff);
         g.drawCircle(proj.position.x, proj.position.y, proj.radius);
         g.endFill();
       });
@@ -484,6 +500,9 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     };
   }, [socket]);
 
+  const localPlayer = gameStateRef.current?.players.find((p: any) => p.id === localPlayerId.current);
+  const activeHero = HERO_CATALOG[localPlayer?.heroId || 'axe'] || HERO_CATALOG.axe;
+
   return (
     <div className="relative w-full h-full overflow-hidden">
       {/* Container onde o PixiJS irá montar seu Canvas */}
@@ -498,10 +517,10 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
             Q
           </span>
           <p className="text-white font-bold text-xs mt-1 truncate max-w-full">
-            {GAME_SETTINGS.ABILITIES.Q.NAME}
+            {activeHero.abilities.Q.name}
           </p>
           <p className="text-[10px] text-zinc-500 font-semibold mt-1">
-            Custo: {GAME_SETTINGS.ABILITIES.Q.MANA_COST}
+            Custo: {activeHero.abilities.Q.manaCost}
           </p>
           {qCooldown > 0 && (
             <div className="absolute inset-0 bg-black/85 flex items-center justify-center rounded-2xl">
@@ -516,10 +535,10 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
             W
           </span>
           <p className="text-white font-bold text-xs mt-1 truncate max-w-full">
-            {GAME_SETTINGS.ABILITIES.W.NAME}
+            {activeHero.abilities.W.name}
           </p>
           <p className="text-[10px] text-zinc-500 font-semibold mt-1">
-            Custo: {GAME_SETTINGS.ABILITIES.W.MANA_COST}
+            Custo: {activeHero.abilities.W.manaCost}
           </p>
           {wCooldown > 0 && (
             <div className="absolute inset-0 bg-black/85 flex items-center justify-center rounded-2xl">

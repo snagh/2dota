@@ -2,6 +2,8 @@ import { Server } from 'socket.io';
 import { 
   GAME_SETTINGS, 
   TOWER_LOCATIONS, 
+  HERO_CATALOG,
+  normalize,
   type Vector2D, 
   type SkillshotProjectile 
 } from 'shared';
@@ -9,6 +11,7 @@ import {
 export interface ServerPlayer {
   id: string;
   username: string;
+  heroId: string;
   x: number;
   y: number;
   targetX: number;
@@ -130,7 +133,7 @@ export abstract class BaseRoom {
   /**
    * Adiciona um novo jogador ao mapa da sala
    */
-  public addPlayer(id: string, username: string): ServerPlayer {
+  public addPlayer(id: string, username: string, heroId?: string): ServerPlayer {
     const team1Count = Array.from(this.players.values()).filter(p => p.team === 1).length;
     const team2Count = Array.from(this.players.values()).filter(p => p.team === 2).length;
     const team = team1Count <= team2Count ? 1 : 2;
@@ -138,17 +141,21 @@ export abstract class BaseRoom {
     const spawnX = team === 1 ? 150 : 2250;
     const spawnY = team === 1 ? 2250 : 150;
 
+    const heroKey = heroId && HERO_CATALOG[heroId] ? heroId : 'axe';
+    const heroDef = HERO_CATALOG[heroKey];
+
     const newPlayer: ServerPlayer = {
       id,
-      username: username || `Heroi_${id.substring(0, 4)}`,
+      username: username || heroDef.name,
+      heroId: heroKey,
       x: spawnX,
       y: spawnY,
       targetX: spawnX,
       targetY: spawnY,
-      hp: GAME_SETTINGS.PLAYER.BASE_HP,
-      maxHp: GAME_SETTINGS.PLAYER.BASE_HP,
-      mp: GAME_SETTINGS.PLAYER.BASE_MP,
-      maxMp: GAME_SETTINGS.PLAYER.BASE_MP,
+      hp: heroDef.baseHp,
+      maxHp: heroDef.baseHp,
+      mp: heroDef.baseMp,
+      maxMp: heroDef.baseMp,
       team,
       cooldowns: { Q: 0, W: 0 },
       kills: 0,
@@ -194,8 +201,158 @@ export abstract class BaseRoom {
     });
   }
 
+  /**
+   * Respawna jogador morto
+   */
+  public killPlayerInternal(player: ServerPlayer) {
+    const heroDef = HERO_CATALOG[player.heroId || 'axe'];
+    player.deaths++;
+    player.x = player.team === 1 ? 150 : 2250;
+    player.y = player.team === 1 ? 2250 : 150;
+    player.targetX = player.x;
+    player.targetY = player.y;
+    player.hp = heroDef.baseHp;
+    player.mp = heroDef.baseMp;
+    player.path = [];
+    player.targetId = null;
+    if (this.roomName === 'turn_based') {
+      player.ap = 0;
+      player.mpPoints = 0;
+    }
+  }
+
+  /**
+   * Cast de Habilidade genérica baseada em Behavior (Q ou W)
+   */
+  public castAbility(id: string, key: 'Q' | 'W', targetX: number, targetY: number): void {
+    const player = this.players.get(id);
+    if (!player || player.hp <= 0) return;
+
+    if (this.roomName === 'turn_based') {
+      const turnRoom = this as any;
+      const activePlayerId = turnRoom.turnOrder[turnRoom.activePlayerIndex];
+      if (id !== activePlayerId || turnRoom.isNpcTurn || player.ap <= 0) return;
+    }
+
+    const heroDef = HERO_CATALOG[player.heroId || 'axe'];
+    const config = heroDef.abilities[key];
+    const now = Date.now();
+
+    if (this.roomName !== 'turn_based' && now < player.cooldowns[key]) return;
+    if (player.mp < config.manaCost) return;
+
+    // Consome recursos
+    player.mp -= config.manaCost;
+    if (this.roomName === 'turn_based') {
+      player.ap -= 1;
+    } else {
+      player.cooldowns[key] = now + config.cooldown * 1000;
+    }
+
+    // Executa comportamento
+    if (config.behavior === 'SKILLSHOT') {
+      const directionX = targetX - player.x;
+      const directionY = targetY - player.y;
+      const dirVec = normalize({ x: directionX, y: directionY });
+
+      const projectileId = `proj_${id}_${key}_${this.projectileIdCounter++}`;
+      const newProjectile: SkillshotProjectile = {
+        id: projectileId,
+        casterId: id,
+        position: { x: player.x, y: player.y },
+        direction: dirVec,
+        speed: 450,
+        radius: config.radius || 20,
+        damage: config.damage,
+        distanceTraveled: 0,
+        maxRange: config.range
+      };
+
+      this.projectiles.set(projectileId, newProjectile);
+
+      this.io.emit('ability_casted', {
+        casterId: id,
+        key,
+        projectileId,
+        position: { x: player.x, y: player.y },
+        direction: dirVec,
+        color: config.color || 0xffffff
+      });
+
+    } else if (config.behavior === 'BLINK') {
+      const dist = Math.sqrt(Math.pow(targetX - player.x, 2) + Math.pow(targetY - player.y, 2));
+      const allowedDist = Math.min(config.blinkDistance || 400, dist);
+      
+      const dirX = targetX - player.x;
+      const dirY = targetY - player.y;
+      const len = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
+      
+      const newX = player.x + (dirX / len) * allowedDist;
+      const newY = player.y + (dirY / len) * allowedDist;
+
+      player.x = Math.max(0, Math.min(GAME_SETTINGS.MAP.WIDTH, newX));
+      player.y = Math.max(0, Math.min(GAME_SETTINGS.MAP.HEIGHT, newY));
+      player.targetX = player.x;
+      player.targetY = player.y;
+      player.path = [];
+      player.targetId = null;
+
+      this.io.emit('ability_casted', {
+        casterId: id,
+        key,
+        position: { x: player.x, y: player.y },
+        blink: true
+      });
+
+    } else if (config.behavior === 'SELF_BUFF') {
+      if (config.healAmount) {
+        player.hp = Math.min(heroDef.baseHp, player.hp + config.healAmount);
+      }
+      
+      this.io.emit('ability_casted', {
+        casterId: id,
+        key,
+        selfBuff: true
+      });
+
+    } else if (config.behavior === 'TARGET_AOE') {
+      // Aplica dano instantâneo em área
+      this.creeps.forEach(creep => {
+        const dist = Math.sqrt(Math.pow(creep.x - targetX, 2) + Math.pow(creep.y - targetY, 2));
+        if (dist <= config.radius) {
+          creep.hp = Math.max(0, creep.hp - config.damage);
+          if (creep.hp <= 0) {
+            this.creeps.delete(creep.id);
+          }
+        }
+      });
+
+      this.players.forEach(p => {
+        if (p.id !== id && p.team !== player.team && p.hp > 0) {
+          const dist = Math.sqrt(Math.pow(p.x - targetX, 2) + Math.pow(p.y - targetY, 2));
+          if (dist <= config.radius) {
+            p.hp = Math.max(0, p.hp - config.damage);
+            if (p.hp <= 0) {
+              player.kills++;
+              this.killPlayerInternal(p);
+            }
+          }
+        }
+      });
+
+      this.io.emit('ability_casted', {
+        casterId: id,
+        key,
+        targetX,
+        targetY,
+        aoe: true,
+        radius: config.radius,
+        color: config.color || 0xff0000
+      });
+    }
+  }
+
   // Métodos abstratos específicos de cada modo
   public abstract movePlayer(id: string, x: number, y: number): void;
-  public abstract castAbility(id: string, key: 'Q' | 'W', targetX: number, targetY: number): void;
   public abstract destroy(): void;
 }

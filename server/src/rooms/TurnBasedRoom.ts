@@ -123,7 +123,7 @@ export class TurnBasedRoom extends BaseRoom {
             if (player.hp <= 0) {
               const caster = this.players.get(proj.casterId);
               if (caster) caster.kills++;
-              this.killPlayer(player);
+              this.killPlayerInternal(player);
             }
             break;
           }
@@ -162,22 +162,7 @@ export class TurnBasedRoom extends BaseRoom {
     });
   }
 
-  /**
-   * Respawna o jogador morto na base e reseta fila
-   */
-  private killPlayer(player: ServerPlayer) {
-    player.deaths++;
-    player.x = player.team === 1 ? 150 : 2250;
-    player.y = player.team === 1 ? 2250 : 150;
-    player.targetX = player.x;
-    player.targetY = player.y;
-    player.hp = GAME_SETTINGS.PLAYER.BASE_HP;
-    player.mp = GAME_SETTINGS.PLAYER.BASE_MP;
-    player.path = [];
-    player.ap = 0;
-    player.mpPoints = 0;
-    player.targetId = null;
-  }
+
 
   /**
    * Passa o turno para o próximo jogador ou aciona o turno de NPC
@@ -250,7 +235,7 @@ export class TurnBasedRoom extends BaseRoom {
           if (target.id.includes('creep')) {
             this.creeps.delete(target.id);
           } else {
-            this.killPlayer(target);
+            this.killPlayerInternal(target);
           }
         }
       }
@@ -276,7 +261,7 @@ export class TurnBasedRoom extends BaseRoom {
         if (minDist <= GAME_SETTINGS.CREEPS.ATTACK_RANGE) {
           target.hp = Math.max(0, target.hp - GAME_SETTINGS.CREEPS.DAMAGE);
           if (target.hp <= 0) {
-            this.killPlayer(target);
+            this.killPlayerInternal(target);
           }
         }
       }
@@ -332,51 +317,7 @@ export class TurnBasedRoom extends BaseRoom {
     }
   }
 
-  /**
-   * Implementação da conjuração de magia limitada por PA (Pontos de Ação)
-   */
-  public override castAbility(id: string, key: 'Q' | 'W', targetX: number, targetY: number) {
-    const activePlayerId = this.turnOrder[this.activePlayerIndex];
-    if (id !== activePlayerId || this.isNpcTurn) return;
 
-    const player = this.players.get(id);
-    if (!player || player.hp <= 0 || player.ap <= 0) return;
-
-    const config = GAME_SETTINGS.ABILITIES[key];
-    if (player.mp < config.MANA_COST) return;
-
-    // Consome Mana e PA
-    player.mp -= config.MANA_COST;
-    player.ap -= TURN_RULES.AP_COST_ABILITY;
-
-    // Cria o Projétil
-    const directionX = targetX - player.x;
-    const directionY = targetY - player.y;
-    const dirVec = normalize({ x: directionX, y: directionY });
-
-    const projectileId = `proj_${id}_${key}_${this.projectileIdCounter++}`;
-    const newProjectile: SkillshotProjectile = {
-      id: projectileId,
-      casterId: id,
-      position: { x: player.x, y: player.y },
-      direction: dirVec,
-      speed: config.SPEED,
-      radius: config.RADIUS,
-      damage: config.DAMAGE,
-      distanceTraveled: 0,
-      maxRange: config.RANGE
-    };
-
-    this.projectiles.set(projectileId, newProjectile);
-
-    this.io.emit('ability_casted', {
-      casterId: id,
-      key,
-      projectileId,
-      position: { x: player.x, y: player.y },
-      direction: dirVec
-    });
-  }
 
   /**
    * Notifica a troca de turnos
