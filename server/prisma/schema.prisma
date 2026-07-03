@@ -1,0 +1,42 @@
+// Prisma schema file for 2dota
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String?   @unique
+  passwordHash String
+  coins        Int       @default(0) // Moedas do jogo (compra de skins/itens)
+  wins         Int       @default(0) // Vitórias totais no Battle Royale
+  gamesPlayed  Int       @default(0) // Partidas jogadas
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  skins        Skin[]    // Skins habilitadas do jogador
+  activeSkinId String?
+}
+
+model Skin {
+  id          String   @id @default(uuid())
+  name        String
+  spriteUrl   String
+  price       Int      @default(0)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+}
+
+model MatchHistory {
+  id        String   @id @default(uuid())
+  winnerId  String
+  playersCount Int
+  durationSeconds Int
+  createdAt DateTime @default(now())
+}
