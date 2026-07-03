@@ -25,6 +25,8 @@ export interface ServerPlayer {
   kills: number;
   deaths: number;
   path: Vector2D[];
+  targetId: string | null;
+  lastAttackTime: number;
   
   // Atributos de Turno (PA e PM)
   ap: number; // Action Points (Pontos de Ação)
@@ -152,6 +154,8 @@ export abstract class BaseRoom {
       kills: 0,
       deaths: 0,
       path: [],
+      targetId: null,
+      lastAttackTime: 0,
       // Atributos de Turno
       ap: 2,
       maxAp: 2,

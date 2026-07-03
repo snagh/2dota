@@ -147,6 +147,13 @@ export class TurnBasedRoom extends BaseRoom {
       }
     }
 
+    // Limpeza de creeps mortos (Modo Turno)
+    for (const creep of this.creeps.values()) {
+      if (creep.hp <= 0) {
+        this.creeps.delete(creep.id);
+      }
+    }
+
     // Envia o estado completo no modo de TURNO
     const activePlayerId = this.turnOrder[this.activePlayerIndex] || null;
     this.sendGameState('TURN_BASED', {
@@ -169,6 +176,7 @@ export class TurnBasedRoom extends BaseRoom {
     player.path = [];
     player.ap = 0;
     player.mpPoints = 0;
+    player.targetId = null;
   }
 
   /**
@@ -203,19 +211,30 @@ export class TurnBasedRoom extends BaseRoom {
     this.isNpcTurn = true;
     this.broadcastTurnInfo();
 
-    // 1. Torres atacam inimigos próximos
+    // 1. Torres atacam inimigos próximos (heróis ou creeps)
     this.towers.forEach(tower => {
       if (tower.hp <= 0) return;
       
-      let target: ServerPlayer | null = null;
+      let target: any = null;
       let minDist = GAME_SETTINGS.TOWERS.ATTACK_RANGE;
 
+      // Busca heróis inimigos
       for (const player of this.players.values()) {
         if (player.hp <= 0 || player.team === tower.team) continue;
         const dist = this.getDistance(tower, player);
         if (dist < minDist) {
           minDist = dist;
           target = player;
+        }
+      }
+
+      // Busca creeps inimigos
+      for (const creep of this.creeps.values()) {
+        if (creep.hp <= 0 || creep.team === tower.team) continue;
+        const dist = this.getDistance(tower, creep);
+        if (dist < minDist) {
+          minDist = dist;
+          target = creep;
         }
       }
 
@@ -228,7 +247,11 @@ export class TurnBasedRoom extends BaseRoom {
         });
 
         if (target.hp <= 0) {
-          this.killPlayer(target);
+          if (target.id.includes('creep')) {
+            this.creeps.delete(target.id);
+          } else {
+            this.killPlayer(target);
+          }
         }
       }
     });

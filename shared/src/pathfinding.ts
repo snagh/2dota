@@ -22,11 +22,11 @@ export function initializeObstacles() {
   }
 
   // 1. Cria um rio central diagonal (do canto superior esquerdo ao inferior direito)
-  // Bloqueia uma faixa diagonal, EXCETO pelas pontes/rampas de travessia das rotas
+  // Bloqueia uma faixa diagonal (c === r), EXCETO pelas pontes/rampas de travessia das rotas
   for (let r = 0; r < GRID_ROWS; r++) {
     for (let c = 0; c < GRID_COLS; c++) {
-      // Equação da diagonal oposta: c + r próximo ao centro (75)
-      const distToDiagonal = Math.abs(c + r - GRID_COLS);
+      // Equação da diagonal principal: c - r próximo de 0
+      const distToDiagonal = Math.abs(c - r);
       
       if (distToDiagonal <= 2) {
         // Rio bloqueado
@@ -36,23 +36,23 @@ export function initializeObstacles() {
   }
 
   // Abre "pontes" no rio para permitir travessias nas lanes:
-  // Ponte do Top (Superior Esquerdo)
-  for (let r = 5; r <= 9; r++) {
-    for (let c = GRID_COLS - 11; c <= GRID_COLS - 7; c++) {
+  // Ponte do Top (Canto Superior Esquerdo - cruzamento da rota Top)
+  for (let r = 3; r <= 7; r++) {
+    for (let c = 3; c <= 7; c++) {
       if (r < GRID_ROWS && c < GRID_COLS && r >= 0 && c >= 0) obstacleGrid[r][c] = 0;
     }
   }
 
-  // Ponte do Mid (Centro)
+  // Ponte do Mid (Centro do Mapa)
   for (let r = 35; r <= 39; r++) {
     for (let c = 35; c <= 39; c++) {
       if (r < GRID_ROWS && c < GRID_COLS && r >= 0 && c >= 0) obstacleGrid[r][c] = 0;
     }
   }
 
-  // Ponte do Bot (Inferior Direito)
-  for (let r = GRID_ROWS - 10; r <= GRID_ROWS - 6; r++) {
-    for (let c = 6; c <= 10; c++) {
+  // Ponte do Bot (Canto Inferior Direito - cruzamento da rota Bot)
+  for (let r = 67; r <= 71; r++) {
+    for (let c = 67; c <= 71; c++) {
       if (r < GRID_ROWS && c < GRID_COLS && r >= 0 && c >= 0) obstacleGrid[r][c] = 0;
     }
   }

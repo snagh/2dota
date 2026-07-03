@@ -36,10 +36,52 @@ export class RealTimeRoom extends BaseRoom {
     const dt = (now - this.lastTickTime) / 1000;
     this.lastTickTime = now;
 
-    // 1. Movimentação dos Jogadores ao longo dos waypoints
+    // 1. Movimentação dos Jogadores ao longo dos waypoints / Auto-Ataques
     for (const player of this.players.values()) {
       if (player.hp <= 0) continue;
 
+      // 1.1 Se o jogador tem um alvo focado (targetId)
+      if (player.targetId) {
+        let targetUnit: any = this.creeps.get(player.targetId) || this.players.get(player.targetId);
+
+        if (targetUnit && targetUnit.hp > 0) {
+          const distToTarget = this.getDistance(player, targetUnit);
+
+          // Alcance de auto-ataque = 60 pixels
+          if (distToTarget <= 60) {
+            player.path = []; // Para de andar
+            
+            // Ataca se o cooldown de 1.0s tiver expirado
+            if (now - player.lastAttackTime > 1000) {
+              targetUnit.hp = Math.max(0, targetUnit.hp - 40); // 40 de dano de ataque básico
+              player.lastAttackTime = now;
+
+              this.io.emit('unit_attacked', {
+                attackerId: player.id,
+                targetId: targetUnit.id,
+                damage: 40
+              });
+
+              if (targetUnit.hp <= 0) {
+                if (targetUnit.id.includes('creep')) {
+                  this.creeps.delete(targetUnit.id);
+                } else {
+                  player.kills++;
+                  this.killPlayer(targetUnit);
+                }
+                player.targetId = null; // Alvo morreu
+              }
+            }
+          } else {
+            // Recalcula o caminho até o alvo em movimento
+            player.path = findPath({ x: player.x, y: player.y }, { x: targetUnit.x, y: targetUnit.y });
+          }
+        } else {
+          player.targetId = null; // Alvo inválido ou já morto
+        }
+      }
+
+      // 1.2 Processa a movimentação mecânica
       if (player.path && player.path.length > 0) {
         const nextWaypoint = player.path[0];
         const maxDist = GAME_SETTINGS.PLAYER.SPEED * dt;
@@ -149,35 +191,50 @@ export class RealTimeRoom extends BaseRoom {
       }
     }
 
-    // 4. Ataque das Torres Sentinel/Scourge
+    // 4. Ataque das Torres Sentinel/Scourge (Ataca heróis ou creeps inimigos)
     this.towers.forEach(tower => {
       if (tower.hp <= 0) return;
 
       if (now - tower.lastShotTime > 1500) {
-        let nearestEnemy: ServerPlayer | null = null;
+        let target: any = null;
         let minDist = GAME_SETTINGS.TOWERS.ATTACK_RANGE;
 
+        // Procura heróis inimigos
         for (const player of this.players.values()) {
           if (player.hp <= 0 || player.team === tower.team) continue;
           const dist = this.getDistance(tower, player);
           if (dist < minDist) {
             minDist = dist;
-            nearestEnemy = player;
+            target = player;
           }
         }
 
-        if (nearestEnemy) {
-          nearestEnemy.hp = Math.max(0, nearestEnemy.hp - GAME_SETTINGS.TOWERS.DAMAGE);
+        // Procura creeps inimigos (se não houver herói, ou ataca o mais próximo)
+        for (const creep of this.creeps.values()) {
+          if (creep.hp <= 0 || creep.team === tower.team) continue;
+          const dist = this.getDistance(tower, creep);
+          if (dist < minDist) {
+            minDist = dist;
+            target = creep;
+          }
+        }
+
+        if (target) {
+          target.hp = Math.max(0, target.hp - GAME_SETTINGS.TOWERS.DAMAGE);
           tower.lastShotTime = now;
 
           this.io.emit('tower_attacked', {
             towerId: tower.id,
-            targetId: nearestEnemy.id,
+            targetId: target.id,
             damage: GAME_SETTINGS.TOWERS.DAMAGE
           });
 
-          if (nearestEnemy.hp <= 0) {
-            this.killPlayer(nearestEnemy);
+          if (target.hp <= 0) {
+            if (target.id.includes('creep')) {
+              this.creeps.delete(target.id);
+            } else {
+              this.killPlayer(target);
+            }
           }
         }
       }
@@ -199,6 +256,7 @@ export class RealTimeRoom extends BaseRoom {
     player.hp = GAME_SETTINGS.PLAYER.BASE_HP;
     player.mp = GAME_SETTINGS.PLAYER.BASE_MP;
     player.path = [];
+    player.targetId = null;
   }
 
   /**
@@ -208,12 +266,39 @@ export class RealTimeRoom extends BaseRoom {
     const player = this.players.get(id);
     if (!player || player.hp <= 0) return;
 
-    const targetX = Math.max(0, Math.min(GAME_SETTINGS.MAP.WIDTH, x));
-    const targetY = Math.max(0, Math.min(GAME_SETTINGS.MAP.HEIGHT, y));
-    player.targetX = targetX;
-    player.targetY = targetY;
+    // 1. Procura se há um alvo (creep ou player inimigo) próximo ao local do clique
+    let foundTarget: any = null;
+    const clickRadius = 32;
 
-    player.path = findPath({ x: player.x, y: player.y }, { x: targetX, y: targetY });
+    for (const creep of this.creeps.values()) {
+      if (creep.hp > 0 && this.getDistance({ x, y }, creep) < clickRadius) {
+        foundTarget = creep;
+        break;
+      }
+    }
+
+    if (!foundTarget) {
+      for (const p of this.players.values()) {
+        if (p.id !== id && p.hp > 0 && p.team !== player.team && this.getDistance({ x, y }, p) < clickRadius) {
+          foundTarget = p;
+          break;
+        }
+      }
+    }
+
+    if (foundTarget) {
+      player.targetId = foundTarget.id;
+      player.targetX = foundTarget.x;
+      player.targetY = foundTarget.y;
+      player.path = findPath({ x: player.x, y: player.y }, { x: foundTarget.x, y: foundTarget.y });
+    } else {
+      player.targetId = null;
+      const targetX = Math.max(0, Math.min(GAME_SETTINGS.MAP.WIDTH, x));
+      const targetY = Math.max(0, Math.min(GAME_SETTINGS.MAP.HEIGHT, y));
+      player.targetX = targetX;
+      player.targetY = targetY;
+      player.path = findPath({ x: player.x, y: player.y }, { x: targetX, y: targetY });
+    }
   }
 
   /**
