@@ -21,41 +21,9 @@ export function initializeObstacles() {
     }
   }
 
-  // 1. Cria um rio central diagonal (do canto superior esquerdo ao inferior direito)
-  // Bloqueia uma faixa diagonal (c === r), EXCETO pelas pontes/rampas de travessia das rotas
-  for (let r = 0; r < GRID_ROWS; r++) {
-    for (let c = 0; c < GRID_COLS; c++) {
-      // Equação da diagonal principal: c - r próximo de 0
-      const distToDiagonal = Math.abs(c - r);
-      
-      if (distToDiagonal <= 2) {
-        // Rio bloqueado
-        obstacleGrid[r][c] = 1;
-      }
-    }
-  }
-
-  // Abre "pontes" no rio para permitir travessias nas lanes:
-  // Ponte do Top (Canto Superior Esquerdo - cruzamento da rota Top)
-  for (let r = 3; r <= 7; r++) {
-    for (let c = 3; c <= 7; c++) {
-      if (r < GRID_ROWS && c < GRID_COLS && r >= 0 && c >= 0) obstacleGrid[r][c] = 0;
-    }
-  }
-
-  // Ponte do Mid (Centro do Mapa)
-  for (let r = 35; r <= 39; r++) {
-    for (let c = 35; c <= 39; c++) {
-      if (r < GRID_ROWS && c < GRID_COLS && r >= 0 && c >= 0) obstacleGrid[r][c] = 0;
-    }
-  }
-
-  // Ponte do Bot (Canto Inferior Direito - cruzamento da rota Bot)
-  for (let r = 67; r <= 71; r++) {
-    for (let c = 67; c <= 71; c++) {
-      if (r < GRID_ROWS && c < GRID_COLS && r >= 0 && c >= 0) obstacleGrid[r][c] = 0;
-    }
-  }
+  // 1. Rio Central Diagonal
+  // O rio agora é 100% caminhável (como no Dota 2 real), permitindo trânsito direto e livre travessia.
+  // Isso resolve travamentos e lag spikes de CPU que ocorriam quando a busca A* tentava contornar a diagonal inteira.
 
   // 2. Cria florestas / selva (Jungle)
   // Top Jungle (Acima do Mid)

@@ -111,6 +111,13 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     baseGraphics.drawCircle(2250, 150, 180);
     mapDecorLayer.addChild(baseGraphics);
 
+    // Desenha o Rio Central (Água Azul Translúcida)
+    const riverGraphics = new PIXI.Graphics();
+    riverGraphics.lineStyle(160, 0x1d4ed8, 0.25); // 160px de largura, azul dota translúcido
+    riverGraphics.moveTo(0, 0);
+    riverGraphics.lineTo(2400, 2400);
+    mapDecorLayer.addChild(riverGraphics);
+
     // Desenha a Grade de Obstáculos Estáticos (A* Obstacles)
     const obstacleGrid = getObstacleGrid();
     const obstacleGraphics = new PIXI.Graphics();
