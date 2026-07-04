@@ -8,6 +8,19 @@ import { type GameMode } from 'shared';
 
 const app = express();
 const httpServer = createServer(app);
+
+// Configuração do CORS para rotas REST do Express (evita bloqueios no fetch de itens)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
 const io = new Server(httpServer, {
   cors: {
     origin: '*',

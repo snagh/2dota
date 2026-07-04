@@ -389,9 +389,19 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     });
 
     // Escutar eventos de abates (kill_event) enviados pelo servidor
-    socket.on('kill_event', (data: { killerName: string; killerHeroId: string; victimName: string; victimHeroId: string }) => {
+    socket.on('kill_event', (data: { killerName?: string; killerHeroId?: string; victimName: string; victimHeroId: string }) => {
       const feedId = Math.random().toString(36).substring(2, 9);
-      const entry: KillFeedEntry = { id: feedId, ...data };
+      
+      const killerName = data.killerName || 'Neutros';
+      const killerHeroId = data.killerHeroId || 'creep';
+
+      const entry: KillFeedEntry = { 
+        id: feedId, 
+        killerName, 
+        killerHeroId, 
+        victimName: data.victimName, 
+        victimHeroId: data.victimHeroId 
+      };
       setKillFeed(prev => [...prev, entry]);
 
       // Remover automaticamente o abate do feed após 5 segundos
@@ -400,12 +410,18 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       }, 5000);
 
       // Configurar anúncio dramático centralizado
-      const killerHero = HERO_CATALOG[data.killerHeroId]?.name || data.killerHeroId;
+      const killerHero = HERO_CATALOG[killerHeroId]?.name || 'Monstro Neutro';
       const victimHero = HERO_CATALOG[data.victimHeroId]?.name || data.victimHeroId;
       
+      const displayVictimName = data.victimName ? data.victimName.toUpperCase() : 'HERÓI';
+
       setAnnouncement({
-        title: `${data.killerName.toUpperCase()} SLAUGHTERED ${data.victimName.toUpperCase()}!`,
-        subtitle: `${killerHero} slaughtered ${victimHero}`
+        title: data.killerName 
+          ? `${data.killerName.toUpperCase()} SLAUGHTERED ${displayVictimName}!`
+          : `${displayVictimName} FOI EXECUTADO POR NEUTROS!`,
+        subtitle: data.killerName 
+          ? `${killerHero} derrotou ${victimHero}`
+          : `Morreu para monstros neutros / torre / Roshan`
       });
 
       // Limpar anúncio após 3 segundos
@@ -1571,7 +1587,7 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       )}
 
       {/* ── Refined Minimap Wrap with glass runic border ── */}
-      <div className="absolute bottom-[95px] right-[16px] z-40 p-1 bg-zinc-950/80 backdrop-blur-md rounded-xl border border-cyan-500/40 shadow-[0_0_16px_rgba(6,182,212,0.25)]">
+      <div className="absolute bottom-[215px] right-[24px] z-40 p-1 bg-zinc-950/80 backdrop-blur-md rounded-xl border border-cyan-500/40 shadow-[0_0_16px_rgba(6,182,212,0.25)]">
         <canvas
           ref={minimapRef}
           width={200}
