@@ -129,6 +129,13 @@ export class TurnBasedRoom extends BaseRoom {
 
             const caster = this.players.get(proj.casterId);
             if (caster) {
+              // Verificação de Lifesteal para ataques ranged no Modo Turno
+              let lifestealPct = 0;
+              if (caster.heroId === 'broodmother' && this.isBuffActive(caster, 'R', 10000)) lifestealPct = 0.8;
+              if (lifestealPct > 0) {
+                caster.hp = Math.min(caster.maxHp, caster.hp + proj.damage * lifestealPct);
+              }
+
               this.io.emit('unit_attacked', {
                 attackerId: proj.casterId,
                 targetId: target.id,
@@ -413,6 +420,14 @@ export class TurnBasedRoom extends BaseRoom {
           } else {
             // Melee instant damage
             targetUnit.hp = Math.max(0, targetUnit.hp - player.baseDamage);
+
+            // Verificação de Lifesteal para ataques melee no Modo Turno
+            let lifestealPct = 0;
+            if (player.heroId === 'broodmother' && this.isBuffActive(player, 'R', 10000)) lifestealPct = 0.8;
+            if (player.heroId === 'chaos_knight') lifestealPct = 0.35;
+            if (lifestealPct > 0) {
+              player.hp = Math.min(player.maxHp, player.hp + player.baseDamage * lifestealPct);
+            }
 
             this.io.emit('unit_attacked', {
               attackerId: player.id,

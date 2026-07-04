@@ -131,6 +131,14 @@ export class RealTimeRoom extends BaseRoom {
                 // Melee: Causa dano instantâneo
                 targetUnit.hp = Math.max(0, targetUnit.hp - player.baseDamage);
 
+                // Verificação de Lifesteal para ataques corpo a corpo
+                let lifestealPct = 0;
+                if (player.heroId === 'broodmother' && this.isBuffActive(player, 'R', 10000)) lifestealPct = 0.8;
+                if (player.heroId === 'chaos_knight') lifestealPct = 0.35; // Lifesteal passivo crítico
+                if (lifestealPct > 0) {
+                  player.hp = Math.min(player.maxHp, player.hp + player.baseDamage * lifestealPct);
+                }
+
                 this.io.emit('unit_attacked', {
                   attackerId: player.id,
                   targetId: targetUnit.id,
@@ -155,10 +163,24 @@ export class RealTimeRoom extends BaseRoom {
         }
       }
 
-      // 1.2 Processa a movimentação mecânica
+      // 1.2 Processa a movimentação mecânica com velocidade dinâmica (com velocidade base e buffs)
       if (player.path && player.path.length > 0) {
         const nextWaypoint = player.path[0];
-        const maxDist = GAME_SETTINGS.PLAYER.SPEED * dt;
+        const heroDef = HERO_CATALOG[player.heroId];
+        let speed = heroDef ? heroDef.speed : GAME_SETTINGS.PLAYER.SPEED;
+
+        // Aplica os buffs de velocidade originais do Dota
+        if (player.heroId === 'centaur' && this.isBuffActive(player, 'R', 8000)) {
+          speed += 150; // Stampede
+        } else if (player.heroId === 'alchemist' && this.isBuffActive(player, 'R', 15000)) {
+          speed += 100; // Chemical Rage
+        } else if (player.heroId === 'dark_seer' && this.isBuffActive(player, 'E', 5000)) {
+          speed += 150; // Surge
+        } else if (player.heroId === 'doom' && this.isBuffActive(player, 'W', 10000)) {
+          speed += 70; // Scorched Earth
+        }
+
+        const maxDist = speed * dt;
         const currentPos = { x: player.x, y: player.y };
         
         const nextPos = moveTowards(currentPos, nextWaypoint, maxDist);
@@ -175,9 +197,16 @@ export class RealTimeRoom extends BaseRoom {
       }
     }
 
-    // 2. Inteligência Artificial de Creeps Neutros
+    // 2. Inteligência Artificial de Creeps Neutros e Ilusões
     for (const creep of this.creeps.values()) {
       if (creep.hp <= 0) {
+        this.creeps.delete(creep.id);
+        continue;
+      }
+
+      // Expira clones/ilusões após o tempo de vida limite
+      const cAny = creep as any;
+      if (cAny.isIllusion && cAny.lifetime && Date.now() > cAny.lifetime) {
         this.creeps.delete(creep.id);
         continue;
       }
@@ -286,6 +315,13 @@ export class RealTimeRoom extends BaseRoom {
 
             const caster = this.players.get(proj.casterId);
             if (caster) {
+              // Verificação de Lifesteal para ataques ranged
+              let lifestealPct = 0;
+              if (caster.heroId === 'broodmother' && this.isBuffActive(caster, 'R', 10000)) lifestealPct = 0.8;
+              if (lifestealPct > 0) {
+                caster.hp = Math.min(caster.maxHp, caster.hp + proj.damage * lifestealPct);
+              }
+
               this.io.emit('unit_attacked', {
                 attackerId: proj.casterId,
                 targetId: target.id,

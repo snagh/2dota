@@ -67,7 +67,7 @@ io.on('connection', (socket: Socket) => {
   });
 
   // 3. Conjuração de Habilidade (Skillshot)
-  socket.on('cast_ability', (data: { key: 'Q' | 'W'; x: number; y: number }) => {
+  socket.on('cast_ability', (data: { key: 'Q' | 'W' | 'E' | 'R'; x: number; y: number }) => {
     const room = socketRooms.get(socket.id);
     if (room) {
       room.castAbility(socket.id, data.key, data.x, data.y);

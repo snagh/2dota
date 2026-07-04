@@ -24,6 +24,8 @@ export interface ServerPlayer {
   cooldowns: {
     Q: number;
     W: number;
+    E: number;
+    R: number;
   };
   kills: number;
   deaths: number;
@@ -165,7 +167,7 @@ export abstract class BaseRoom {
       mp: heroDef.baseMp,
       maxMp: heroDef.baseMp,
       team,
-      cooldowns: { Q: 0, W: 0 },
+      cooldowns: { Q: 0, W: 0, E: 0, R: 0 },
       kills: 0,
       deaths: 0,
       path: [],
@@ -286,9 +288,22 @@ export abstract class BaseRoom {
   }
 
   /**
-   * Cast de Habilidade genérica baseada em Behavior (Q ou W)
+   * Verifica se uma habilidade do tipo self-buff/cooldown está ativa baseando-se no timestamp
    */
-  public castAbility(id: string, key: 'Q' | 'W', targetX: number, targetY: number): void {
+  public isBuffActive(player: ServerPlayer, key: 'Q' | 'W' | 'E' | 'R', durationMs: number): boolean {
+    const cdTime = player.cooldowns[key];
+    if (!cdTime) return false;
+    const heroDef = HERO_CATALOG[player.heroId];
+    if (!heroDef) return false;
+    const cooldownMs = heroDef.abilities[key].cooldown * 1000;
+    const castTime = cdTime - cooldownMs;
+    return Date.now() - castTime < durationMs;
+  }
+
+  /**
+   * Cast de Habilidade genérica baseada em Behavior (Q, W, E ou R)
+   */
+  public castAbility(id: string, key: 'Q' | 'W' | 'E' | 'R', targetX: number, targetY: number): void {
     const player = this.players.get(id);
     if (!player || player.hp <= 0) return;
 
@@ -379,6 +394,32 @@ export abstract class BaseRoom {
         selfBuff: true
       });
 
+      // Efeito Especial do Chaos Knight (Phantasm): Invoca ilusões/clones
+      if (config.name === 'Phantasm') {
+        for (let i = 0; i < 2; i++) {
+          const illusionId = `creep_ill_${id}_${this.creepIdCounter++}`;
+          const offsetAngle = (i * Math.PI) + Math.random();
+          const offsetDist = 50;
+          const illX = player.x + Math.cos(offsetAngle) * offsetDist;
+          const illY = player.y + Math.sin(offsetAngle) * offsetDist;
+
+          this.creeps.set(illusionId, {
+            id: illusionId,
+            x: illX,
+            y: illY,
+            targetX: illX,
+            targetY: illY,
+            hp: Math.ceil(player.hp * 0.5), // HP da ilusão é 50% do original
+            maxHp: player.maxHp,
+            team: player.team,
+            radius: GAME_SETTINGS.PLAYER.RADIUS,
+            isIllusion: true,
+            ownerId: player.id,
+            heroId: player.heroId,
+            lifetime: now + 15000 // Expira em 15 segundos
+          } as any);
+        }
+      }
     } else if (config.behavior === 'TARGET_AOE') {
       // Aplica dano instantâneo em área
       this.creeps.forEach(creep => {

@@ -36,6 +36,8 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
   // Estados locais para renderizar na UI do HUD do React
   const [qCooldown, setQCooldown] = useState(0);
   const [wCooldown, setWCooldown] = useState(0);
+  const [eCooldown, setECooldown] = useState(0);
+  const [rCooldown, setRCooldown] = useState(0);
 
   useEffect(() => {
     if (!containerRef.current || !socket) return;
@@ -220,12 +222,18 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     // Cooldown trackers locais em milissegundos
     let qReadyTime = 0;
     let wReadyTime = 0;
+    let eReadyTime = 0;
+    let rReadyTime = 0;
 
     const handleWindowKeyDown = (e: KeyboardEvent) => {
-      const key = e.key.toUpperCase();
-      if (key === 'Q' || key === 'W') {
+      const key = e.key.toUpperCase() as 'Q' | 'W' | 'E' | 'R';
+      if (key === 'Q' || key === 'W' || key === 'E' || key === 'R') {
         const now = Date.now();
-        const readyTime = key === 'Q' ? qReadyTime : wReadyTime;
+        let readyTime = 0;
+        if (key === 'Q') readyTime = qReadyTime;
+        else if (key === 'W') readyTime = wReadyTime;
+        else if (key === 'E') readyTime = eReadyTime;
+        else if (key === 'R') readyTime = rReadyTime;
         
         if (now < readyTime) return; // Em cooldown
 
@@ -247,11 +255,10 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
           if (localPlayer) {
             const heroDef = HERO_CATALOG[localPlayer.heroId || 'axe'];
             const cd = heroDef.abilities[key].cooldown;
-            if (key === 'Q') {
-              qReadyTime = now + cd * 1000;
-            } else {
-              wReadyTime = now + cd * 1000;
-            }
+            if (key === 'Q') qReadyTime = now + cd * 1000;
+            else if (key === 'W') wReadyTime = now + cd * 1000;
+            else if (key === 'E') eReadyTime = now + cd * 1000;
+            else if (key === 'R') rReadyTime = now + cd * 1000;
           }
         }
       }
@@ -417,7 +424,7 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
         t.alpha = player.hp <= 0 ? 0.3 : 1;
       });
 
-      // 6.2 RENDERIZAR CREEPS (Monstros Neutros)
+      // 6.2 RENDERIZAR CREEPS (Monstros Neutros) E ILUSÕES
       state.creeps.forEach((creep: any) => {
         const id = creep.id;
         activeIds.add(id);
@@ -430,10 +437,49 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
         }
 
         g.clear();
-        g.beginFill(0xa1a1aa); // Cor cinza/amarelo neutro
-        g.lineStyle(1.5, 0xffffff, 0.6);
-        g.drawCircle(creep.x, creep.y, creep.radius);
-        g.endFill();
+        if (creep.isIllusion) {
+          let illColor = 0xa855f7; // Roxo padrão
+          const ownerHero = HERO_CATALOG[creep.heroId || 'axe'];
+          if (ownerHero) {
+            if (ownerHero.attribute === 'STR') illColor = 0xef4444;
+            else if (ownerHero.attribute === 'AGI') illColor = 0x10b981;
+            else if (ownerHero.attribute === 'INT') illColor = 0x3b82f6;
+          }
+          g.beginFill(illColor, 0.45); // Translúcido
+          g.lineStyle(2, 0xffffff, 0.5);
+          g.drawCircle(creep.x, creep.y, creep.radius);
+          g.endFill();
+
+          // Nome de ilusão por cima
+          let t = textPool.get(id + '_text');
+          const displayName = `${ownerHero ? ownerHero.name : 'Hero'} (Ilusão)`;
+          if (!t) {
+            t = new PIXI.Text(displayName, {
+              fontFamily: 'Space Grotesk',
+              fontSize: 10,
+              fill: 0x93c5fd,
+              align: 'center',
+            });
+            t.anchor.set(0.5);
+            uiLayer.addChild(t);
+            textPool.set(id + '_text', t);
+          }
+          t.position.set(creep.x, creep.y - creep.radius - 18);
+          t.text = displayName;
+          t.alpha = 0.8;
+        } else {
+          // Creep normal
+          g.beginFill(0xa1a1aa); // Cor cinza/amarelo neutro
+          g.lineStyle(1.5, 0xffffff, 0.6);
+          g.drawCircle(creep.x, creep.y, creep.radius);
+          g.endFill();
+
+          let t = textPool.get(id + '_text');
+          if (t) {
+            t.destroy();
+            textPool.delete(id + '_text');
+          }
+        }
 
         // HP bar do creep
         const barWidth = 30;
@@ -624,6 +670,8 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       const now = Date.now();
       setQCooldown(Math.max(0, Math.ceil((qReadyTime - now) / 1000)));
       setWCooldown(Math.max(0, Math.ceil((wReadyTime - now) / 1000)));
+      setECooldown(Math.max(0, Math.ceil((eReadyTime - now) / 1000)));
+      setRCooldown(Math.max(0, Math.ceil((rReadyTime - now) / 1000)));
     });
 
     // Cleanup completo ao desmontar
@@ -726,6 +774,80 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
               <span>Dano: <strong className="text-red-400">{activeHero.abilities.W.damage || '0'}</strong></span>
               <span>CD: <strong className="text-amber-400">{activeHero.abilities.W.cooldown}s</strong></span>
               <span>Alcance: <strong className="text-blue-400">{activeHero.abilities.W.range || 'Global'}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        {/* Habilidade E */}
+        <div className="group relative flex flex-col items-center bg-black/80 border border-zinc-800 px-4 py-3 rounded-2xl w-24 text-center pointer-events-auto cursor-pointer hover:border-shonen-primary/50 transition-colors">
+          <span className="absolute -top-3 bg-shonen-primary text-black font-extrabold text-xs px-2 py-0.5 rounded-full shadow-glow">
+            E
+          </span>
+          <p className="text-white font-bold text-xs mt-1 truncate max-w-full">
+            {activeHero.abilities.E.name}
+          </p>
+          <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">
+            Mana: {activeHero.abilities.E.manaCost}
+          </p>
+          {eCooldown > 0 && (
+            <div className="absolute inset-0 bg-black/85 flex items-center justify-center rounded-2xl">
+              <span className="text-shonen-secondary font-extrabold text-lg">{eCooldown}s</span>
+            </div>
+          )}
+
+          {/* Tooltip Hover Premium */}
+          <div className="absolute bottom-full mb-3 hidden group-hover:flex flex-col bg-zinc-950/95 border border-zinc-800 p-3.5 rounded-xl w-64 text-left shadow-2xl transition-all duration-200 pointer-events-none">
+            <h4 className="font-extrabold text-sm text-shonen-primary mb-1">
+              {activeHero.abilities.E.name}
+            </h4>
+            <p className="text-[9px] text-zinc-400 font-bold mb-2 uppercase tracking-wider">
+              {activeHero.abilities.E.behavior === 'SKILLSHOT' ? '🎯 Skillshot Direcional' :
+               activeHero.abilities.E.behavior === 'TARGET_AOE' ? '💥 Área de Efeito (AoE)' :
+               activeHero.abilities.E.behavior === 'BLINK' ? '⚡ Teleporte/Blink' : '🛡️ Autocast / Self Buff'}
+            </p>
+            <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+              {activeHero.abilities.E.description}
+            </p>
+            <div className="border-t border-zinc-800/80 mt-2.5 pt-2 flex justify-between text-[10px] font-mono text-zinc-400">
+              <span>Dano: <strong className="text-red-400">{activeHero.abilities.E.damage || '0'}</strong></span>
+              <span>CD: <strong className="text-amber-400">{activeHero.abilities.E.cooldown}s</strong></span>
+              <span>Alcance: <strong className="text-blue-400">{activeHero.abilities.E.range || 'Global'}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        {/* Habilidade R (Ultimate) */}
+        <div className="group relative flex flex-col items-center bg-black/80 border border-zinc-800 px-4 py-3 rounded-2xl w-24 text-center pointer-events-auto cursor-pointer hover:border-shonen-primary/50 transition-colors">
+          <span className="absolute -top-3 bg-amber-500 text-black font-extrabold text-xs px-2 py-0.5 rounded-full shadow-glow">
+            ULT
+          </span>
+          <p className="text-white font-bold text-xs mt-1 truncate max-w-full">
+            {activeHero.abilities.R.name}
+          </p>
+          <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">
+            Mana: {activeHero.abilities.R.manaCost}
+          </p>
+          {rCooldown > 0 && (
+            <div className="absolute inset-0 bg-black/85 flex items-center justify-center rounded-2xl">
+              <span className="text-shonen-secondary font-extrabold text-lg">{rCooldown}s</span>
+            </div>
+          )}
+
+          {/* Tooltip Hover Premium */}
+          <div className="absolute bottom-full mb-3 hidden group-hover:flex flex-col bg-zinc-950/95 border border-zinc-800 p-3.5 rounded-xl w-64 text-left shadow-2xl transition-all duration-200 pointer-events-none">
+            <h4 className="font-extrabold text-sm text-amber-500 mb-1">
+              {activeHero.abilities.R.name}
+            </h4>
+            <p className="text-[9px] text-amber-400 font-bold mb-2 uppercase tracking-wider">
+              ⭐ Habilidade Ultimate
+            </p>
+            <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+              {activeHero.abilities.R.description}
+            </p>
+            <div className="border-t border-zinc-800/80 mt-2.5 pt-2 flex justify-between text-[10px] font-mono text-zinc-400">
+              <span>Dano: <strong className="text-red-400">{activeHero.abilities.R.damage || '0'}</strong></span>
+              <span>CD: <strong className="text-amber-400">{activeHero.abilities.R.cooldown}s</strong></span>
+              <span>Alcance: <strong className="text-blue-400">{activeHero.abilities.R.range || 'Global'}</strong></span>
             </div>
           </div>
         </div>
