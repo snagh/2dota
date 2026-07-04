@@ -145,8 +145,10 @@ export class RealTimeRoom extends BaseRoom {
               }
             }
           } else {
-            // Recalcula o caminho até o alvo em movimento
-            player.path = findPath({ x: player.x, y: player.y }, { x: targetUnit.x, y: targetUnit.y });
+            // Recalcula o caminho periodicamente (~3 vezes por segundo) ou se estiver vazio para evitar jitter e travamento
+            if (!player.path || player.path.length === 0 || Math.random() < 0.1) {
+              player.path = findPath({ x: player.x, y: player.y }, { x: targetUnit.x, y: targetUnit.y });
+            }
           }
         } else {
           player.targetId = null;
