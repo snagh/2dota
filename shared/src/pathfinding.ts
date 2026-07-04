@@ -139,6 +139,47 @@ interface AStarNode {
 }
 
 /**
+ * Encontra a célula livre mais próxima de uma célula bloqueada usando BFS (Breadth-First Search)
+ */
+export function findNearestWalkableCell(col: number, row: number): { col: number; row: number } {
+  if (!isCellBlocked(col, row)) return { col, row };
+
+  const queue: { col: number; row: number }[] = [{ col, row }];
+  const visited = new Set<string>();
+  visited.add(`${col},${row}`);
+
+  const maxSearchDist = 20;
+
+  while (queue.length > 0) {
+    const curr = queue.shift()!;
+    const dist = Math.abs(curr.col - col) + Math.abs(curr.row - row);
+    
+    if (dist > maxSearchDist) continue;
+
+    if (!isCellBlocked(curr.col, curr.row)) {
+      return curr;
+    }
+
+    const neighbors = [
+      { col: curr.col + 1, row: curr.row },
+      { col: curr.col - 1, row: curr.row },
+      { col: curr.col, row: curr.row + 1 },
+      { col: curr.col, row: curr.row - 1 }
+    ];
+
+    for (const n of neighbors) {
+      const key = `${n.col},${n.row}`;
+      if (n.col >= 0 && n.col < GRID_COLS && n.row >= 0 && n.row < GRID_ROWS && !visited.has(key)) {
+        visited.add(key);
+        queue.push(n);
+      }
+    }
+  }
+
+  return { col, row };
+}
+
+/**
  * Algoritmo A* Pathfinding de 8 direções para encontrar caminho em pixels
  */
 export function findPath(start: Vector2D, target: Vector2D): Vector2D[] {
@@ -153,32 +194,10 @@ export function findPath(start: Vector2D, target: Vector2D): Vector2D[] {
     return [target];
   }
 
-  // Se o destino estiver bloqueado, procura uma célula vizinha livre
-  let actualTargetCol = targetCol;
-  let actualTargetRow = targetRow;
-  if (isCellBlocked(targetCol, targetRow)) {
-    const neighbors = [
-      { c: targetCol + 1, r: targetRow },
-      { c: targetCol - 1, r: targetRow },
-      { c: targetCol, r: targetRow + 1 },
-      { c: targetCol, r: targetRow - 1 },
-      { c: targetCol + 1, r: targetRow + 1 },
-      { c: targetCol - 1, r: targetRow - 1 },
-      { c: targetCol + 1, r: targetRow - 1 },
-      { c: targetCol - 1, r: targetRow + 1 }
-    ];
-
-    let foundFree = false;
-    for (const n of neighbors) {
-      if (!isCellBlocked(n.c, n.r)) {
-        actualTargetCol = n.c;
-        actualTargetRow = n.r;
-        foundFree = true;
-        break;
-      }
-    }
-    if (!foundFree) return []; // Sem caminho possível se a vizinhança estiver bloqueada
-  }
+  // Encontra a célula livre mais próxima caso o destino esteja bloqueado (BFS Fallback)
+  const nearest = findNearestWalkableCell(targetCol, targetRow);
+  const actualTargetCol = nearest.col;
+  const actualTargetRow = nearest.row;
 
   const openList: AStarNode[] = [];
   const closedSet = new Set<string>();

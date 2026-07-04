@@ -185,6 +185,35 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
         const worldY = mouseY - app.screen.height / 2 + worldContainer.pivot.y;
 
         socket.emit('move', { x: worldX, y: worldY });
+
+        // Determina se o clique direito focou um inimigo (creep ou player inimigo)
+        let isEnemyClicked = false;
+        const state = gameStateRef.current;
+        if (state) {
+          const clickRadius = 64;
+          const targetCreep = state.creeps.find(
+            (c: any) => c.hp > 0 && Math.sqrt(Math.pow(c.x - worldX, 2) + Math.pow(c.y - worldY, 2)) < clickRadius
+          );
+          let targetEnemyPlayer = null;
+          const localPlayer = state.players.find((p: any) => p.id === localPlayerId.current);
+          if (localPlayer) {
+            targetEnemyPlayer = state.players.find(
+              (p: any) => p.id !== localPlayerId.current && p.hp > 0 && p.team !== localPlayer.team && Math.sqrt(Math.pow(p.x - worldX, 2) + Math.pow(p.y - worldY, 2)) < clickRadius
+            );
+          }
+          if (targetCreep || targetEnemyPlayer) {
+            isEnemyClicked = true;
+          }
+        }
+
+        visualEffects.push({
+          type: 'CLICK_INDICATOR',
+          x: worldX,
+          y: worldY,
+          createdAt: Date.now(),
+          duration: 300,
+          color: isEnemyClicked ? 0xef4444 : 0x22c55e
+        });
       }
     };
 
@@ -558,6 +587,18 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
           fxGraphics.lineTo(fx.x + 20, fx.y + 20);
           fxGraphics.moveTo(fx.x + 20, fx.y - 20);
           fxGraphics.lineTo(fx.x - 20, fx.y + 20);
+        } else if (fx.type === 'CLICK_INDICATOR') {
+          const alpha = 1 - progress;
+          const radius = 4 + progress * 20;
+          fxGraphics.lineStyle(2.5, fx.color || 0x22c55e, alpha);
+          fxGraphics.drawCircle(fx.x, fx.y, radius);
+
+          if (progress > 0.3) {
+            const alpha2 = 1 - (progress - 0.3) / 0.7;
+            const radius2 = 4 + (progress - 0.3) * 15;
+            fxGraphics.lineStyle(1.5, fx.color || 0x22c55e, alpha2);
+            fxGraphics.drawCircle(fx.x, fx.y, radius2);
+          }
         }
       }
 
