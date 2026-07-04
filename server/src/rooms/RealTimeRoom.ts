@@ -196,11 +196,31 @@ export class RealTimeRoom extends BaseRoom {
         if (minDist > GAME_SETTINGS.CREEPS.ATTACK_RANGE) {
           creep.targetX = target.x;
           creep.targetY = target.y;
-          const nextPos = moveTowards(creep, target, GAME_SETTINGS.CREEPS.SPEED * dt);
-          creep.x = nextPos.x;
-          creep.y = nextPos.y;
+
+          // Recalcula rota A* periodicamente (~3 vezes por segundo) para seguir jogador em movimento
+          if (!creep.path || creep.path.length === 0 || Math.random() < 0.1) {
+            creep.path = findPath({ x: creep.x, y: creep.y }, { x: target.x, y: target.y });
+          }
+
+          if (creep.path && creep.path.length > 0) {
+            const nextWaypoint = creep.path[0];
+            const maxDist = GAME_SETTINGS.CREEPS.SPEED * dt;
+            const currentPos = { x: creep.x, y: creep.y };
+            
+            const nextPos = moveTowards(currentPos, nextWaypoint, maxDist);
+            creep.x = nextPos.x;
+            creep.y = nextPos.y;
+
+            const distToWaypoint = Math.sqrt(
+              Math.pow(nextWaypoint.x - creep.x, 2) + Math.pow(nextWaypoint.y - creep.y, 2)
+            );
+            if (distToWaypoint < 4) {
+              creep.path.shift();
+            }
+          }
         } else {
-          // Ataque básico
+          // Ataque básico (reseta rota)
+          creep.path = [];
           if (Math.random() < 0.05) {
             target.hp = Math.max(0, target.hp - GAME_SETTINGS.CREEPS.DAMAGE);
             if (target.hp <= 0) {
@@ -209,10 +229,30 @@ export class RealTimeRoom extends BaseRoom {
           }
         }
       } else {
+        // Retorno ao ponto de spawn
         if (creep.x !== creep.targetX || creep.y !== creep.targetY) {
-          const nextPos = moveTowards(creep, { x: creep.targetX, y: creep.targetY }, GAME_SETTINGS.CREEPS.SPEED * dt);
-          creep.x = nextPos.x;
-          creep.y = nextPos.y;
+          if (!creep.path || creep.path.length === 0) {
+            creep.path = findPath({ x: creep.x, y: creep.y }, { x: creep.targetX, y: creep.targetY });
+          }
+
+          if (creep.path && creep.path.length > 0) {
+            const nextWaypoint = creep.path[0];
+            const maxDist = GAME_SETTINGS.CREEPS.SPEED * dt;
+            const currentPos = { x: creep.x, y: creep.y };
+            
+            const nextPos = moveTowards(currentPos, nextWaypoint, maxDist);
+            creep.x = nextPos.x;
+            creep.y = nextPos.y;
+
+            const distToWaypoint = Math.sqrt(
+              Math.pow(nextWaypoint.x - creep.x, 2) + Math.pow(nextWaypoint.y - creep.y, 2)
+            );
+            if (distToWaypoint < 4) {
+              creep.path.shift();
+            }
+          }
+        } else {
+          creep.path = [];
         }
       }
     }

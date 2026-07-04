@@ -55,6 +55,7 @@ export interface ServerCreep {
   maxHp: number;
   team: number; // 0 = Neutro, 1 = Sentinel, 2 = Scourge
   radius: number;
+  path?: any[];
 }
 
 export interface ServerTower {
