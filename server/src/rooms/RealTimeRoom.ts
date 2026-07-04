@@ -303,10 +303,13 @@ export class RealTimeRoom extends BaseRoom {
           }
         }
       } else {
-        // Retorno ao ponto de spawn
-        if (creep.x !== creep.targetX || creep.y !== creep.targetY) {
+        // Retorno ao ponto de spawn original na selva (evita perambulação)
+        const destX = creep.spawnX !== undefined ? creep.spawnX : creep.targetX;
+        const destY = creep.spawnY !== undefined ? creep.spawnY : creep.targetY;
+
+        if (creep.x !== destX || creep.y !== destY) {
           if (!creep.path || creep.path.length === 0) {
-            creep.path = findPath({ x: creep.x, y: creep.y }, { x: creep.targetX, y: creep.targetY });
+            creep.path = findPath({ x: creep.x, y: creep.y }, { x: destX, y: destY });
           }
 
           if (creep.path && creep.path.length > 0) {
@@ -327,6 +330,9 @@ export class RealTimeRoom extends BaseRoom {
           }
         } else {
           creep.path = [];
+          // Reseta o target para a posição original de spawn para que ele permaneça estático no camp
+          creep.targetX = destX;
+          creep.targetY = destY;
         }
       }
     }

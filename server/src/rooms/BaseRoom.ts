@@ -79,6 +79,8 @@ export interface ServerCreep {
   y: number;
   targetX: number;
   targetY: number;
+  spawnX?: number; // Posição X de spawn original
+  spawnY?: number; // Posição Y de spawn original
   hp: number;
   maxHp: number;
   team: number; // 0 = Neutro, 1 = Sentinel, 2 = Scourge
@@ -291,6 +293,8 @@ export abstract class BaseRoom {
           y: creepY,
           targetX: creepX,
           targetY: creepY,
+          spawnX: creepX,
+          spawnY: creepY,
           hp: GAME_SETTINGS.CREEPS.BASE_HP,
           maxHp: GAME_SETTINGS.CREEPS.BASE_HP,
           team: 0, // Neutro

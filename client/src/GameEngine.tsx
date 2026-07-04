@@ -149,6 +149,7 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     const gridLayer = new PIXI.Container();
     const mapDecorLayer = new PIXI.Container();
     const entitiesLayer = new PIXI.Container();
+    const fogLayer = new PIXI.Container();
     const projectilesLayer = new PIXI.Container();
     const fxLayer = new PIXI.Container();
     const uiLayer = new PIXI.Container();
@@ -156,9 +157,13 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     worldContainer.addChild(gridLayer);
     worldContainer.addChild(mapDecorLayer);
     worldContainer.addChild(entitiesLayer);
+    worldContainer.addChild(fogLayer);
     worldContainer.addChild(projectilesLayer);
     worldContainer.addChild(fxLayer);
     worldContainer.addChild(uiLayer);
+
+    const fogGraphics = new PIXI.Graphics();
+    fogLayer.addChild(fogGraphics);
 
     // Desenha o Grid de Fundo do Mapa
     const gridGraphic = new PIXI.Graphics();
@@ -200,19 +205,41 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     riverGraphics.lineTo(2400, 2400);
     mapDecorLayer.addChild(riverGraphics);
 
-    // Desenha a Grade de Obstáculos Estáticos (A* Obstacles)
+    // Desenha Árvores Estilizadas nos Obstáculos Estáticos (A* Obstacles)
     const obstacleGrid = getObstacleGrid();
     const obstacleGraphics = new PIXI.Graphics();
-    obstacleGraphics.beginFill(0x24242d, 0.45); // Cor de parede/obstáculo no mapa
-    obstacleGraphics.lineStyle(1, 0x1d1d26, 0.4);
+    
     for (let r = 0; r < obstacleGrid.length; r++) {
       for (let c = 0; c < obstacleGrid[r].length; c++) {
         if (obstacleGrid[r][c] === 1) {
-          obstacleGraphics.drawRect(c * tileSize, r * tileSize, tileSize, tileSize);
+          const centerX = c * tileSize + tileSize / 2;
+          const centerY = r * tileSize + tileSize / 2;
+
+          // 1. Sombra da Árvore (Translúcida)
+          obstacleGraphics.beginFill(0x020617, 0.4);
+          obstacleGraphics.lineStyle(0);
+          obstacleGraphics.drawCircle(centerX + 3, centerY + 3, 19);
+          obstacleGraphics.endFill();
+
+          // 2. Copa Principal (Verde Escuro)
+          obstacleGraphics.beginFill(0x064e3b, 1); 
+          obstacleGraphics.lineStyle(1.5, 0x022c22, 0.85);
+          obstacleGraphics.drawCircle(centerX, centerY, 17);
+          obstacleGraphics.endFill();
+
+          // 3. Camada Intermediária (Verde Folha)
+          obstacleGraphics.lineStyle(0);
+          obstacleGraphics.beginFill(0x047857, 1);
+          obstacleGraphics.drawCircle(centerX - 2.5, centerY - 2.5, 11);
+          obstacleGraphics.endFill();
+
+          // 4. Brilho Superior (Verde Claro)
+          obstacleGraphics.beginFill(0x10b981, 1);
+          obstacleGraphics.drawCircle(centerX - 4.5, centerY - 4.5, 6);
+          obstacleGraphics.endFill();
         }
       }
     }
-    obstacleGraphics.endFill();
     mapDecorLayer.addChild(obstacleGraphics);
 
     // 3. Gerenciadores gráficos de entidades dinâmicas e efeitos visuais
@@ -751,6 +778,35 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
         screenShake.current.intensity = Math.max(0, screenShake.current.intensity - decayRate * delta);
       }
       lastShakeTime = nowMs;
+
+      // ── RENDERIZAR FOG OF WAR (Visual Névoa) ──────────────────────────
+      fogGraphics.clear();
+      if (localPlayer) {
+        const pX = predictedPosRef.current ? predictedPosRef.current.x : localPlayer.x;
+        const pY = predictedPosRef.current ? predictedPosRef.current.y : localPlayer.y;
+
+        // Cobre todo o mapa com a escuridão da névoa
+        fogGraphics.beginFill(0x040406, 0.7); // Sombra estilosa para névoa de guerra
+        fogGraphics.drawRect(0, 0, GAME_SETTINGS.MAP.WIDTH, GAME_SETTINGS.MAP.HEIGHT);
+
+        // Fura a névoa ao redor do herói (visão de 900px)
+        fogGraphics.beginHole();
+        fogGraphics.drawCircle(pX, pY, 900);
+        fogGraphics.endHole();
+
+        // Fura a névoa ao redor das torres aliadas vivas
+        const mainTowers = state.towers || cachedTowersRef.current;
+        if (mainTowers && mainTowers.length > 0) {
+          mainTowers.forEach((tower: any) => {
+            if (tower.hp > 0 && tower.team === localPlayer.team) {
+              fogGraphics.beginHole();
+              fogGraphics.drawCircle(tower.x, tower.y, 600); // Torres fornecem visão local
+              fogGraphics.endHole();
+            }
+          });
+        }
+        fogGraphics.endFill();
+      }
 
       // Conjunto de IDs presentes neste tick para limpeza dos expirados
       const activeIds = new Set<string>();
@@ -1356,25 +1412,34 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       <style>{`
         .crystal-frame {
           position: relative;
-          background: rgba(10, 10, 12, 0.85);
-          border: 2px solid rgba(6, 182, 212, 0.45);
-          box-shadow: 0 0 12px rgba(6, 182, 212, 0.25), inset 0 0 6px rgba(6, 182, 212, 0.1);
+          background: rgba(11, 12, 16, 0.92);
+          border: 2.5px solid rgba(102, 252, 241, 0.55);
+          box-shadow: 0 0 14px rgba(102, 252, 241, 0.2), inset 0 0 6px rgba(102, 252, 241, 0.05);
+          border-radius: 12px;
           transition: all 0.3s ease;
         }
         .crystal-frame:hover {
-          border-color: rgba(6, 182, 212, 0.8);
-          box-shadow: 0 0 18px rgba(6, 182, 212, 0.45), inset 0 0 10px rgba(6, 182, 212, 0.2);
+          border-color: rgba(102, 252, 241, 0.95);
+          box-shadow: 0 0 20px rgba(102, 252, 241, 0.45), inset 0 0 10px rgba(102, 252, 241, 0.25);
         }
         .crimson-frame {
           position: relative;
-          background: rgba(20, 10, 10, 0.9);
-          border: 2px solid rgba(239, 68, 68, 0.5);
-          box-shadow: 0 0 12px rgba(239, 68, 68, 0.25), inset 0 0 6px rgba(239, 68, 68, 0.1);
+          background: rgba(20, 11, 11, 0.95);
+          border: 2.5px solid rgba(255, 46, 99, 0.55);
+          box-shadow: 0 0 14px rgba(255, 46, 99, 0.2), inset 0 0 6px rgba(255, 46, 99, 0.05);
+          border-radius: 12px;
           transition: all 0.3s ease;
         }
         .crimson-frame:hover {
-          border-color: rgba(239, 68, 68, 0.85);
-          box-shadow: 0 0 18px rgba(239, 68, 68, 0.45), inset 0 0 10px rgba(239, 68, 68, 0.2);
+          border-color: rgba(255, 46, 99, 0.95);
+          box-shadow: 0 0 20px rgba(255, 46, 99, 0.45), inset 0 0 10px rgba(255, 46, 99, 0.25);
+        }
+        .out-of-mana-frame {
+          position: relative;
+          background: rgba(10, 10, 14, 0.95);
+          border: 2.5px solid rgba(102, 252, 241, 0.15);
+          border-radius: 12px;
+          transition: all 0.3s ease;
         }
         
         @keyframes fadeIn {
@@ -1523,7 +1588,10 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex space-x-4 pointer-events-none z-50">
         {['Q', 'W', 'E', 'R'].map((key) => {
           const { ability, cd, ratio, isOutOfMana } = getAbilityData(key as 'Q' | 'W' | 'E' | 'R');
-          const frameClass = cd > 0 ? 'crimson-frame' : 'crystal-frame';
+          
+          let frameClass = 'crystal-frame';
+          if (isOutOfMana) frameClass = 'out-of-mana-frame';
+          else if (cd > 0) frameClass = 'crimson-frame';
           
           // Formula de escalonamento para os Tooltips
           const baseDamage = ability.damage || 0;
@@ -1537,60 +1605,59 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
           return (
             <div
               key={key}
-              className={`group relative flex flex-col items-center p-3.5 w-24 text-center pointer-events-auto cursor-pointer select-none transition-all duration-300 ${frameClass}`}
-              style={{
-                clipPath: 'polygon(10px 0%, 100% 0%, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0% 100%, 0% 10px)',
-              }}
+              className={`group relative flex flex-col justify-between p-3 w-24 h-24 text-center pointer-events-auto cursor-pointer select-none transition-all duration-300 ${frameClass}`}
             >
               {/* Tecla de Atalho */}
-              <span className={`absolute -top-3.5 font-extrabold text-xs px-2.5 py-0.5 rounded-full shadow-glow transition-all ${
+              <span className={`absolute -top-3.5 left-1/2 -translate-x-1/2 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full shadow-glow transition-all z-20 ${
                 key === 'R' 
                   ? 'bg-amber-500 text-black border border-amber-300' 
-                  : 'bg-cyan-500 text-black border border-cyan-300'
+                  : 'bg-[#66FCF1] text-black border border-[#66FCF1]'
               }`}>
                 {key === 'R' ? 'ULT' : key}
               </span>
 
-              {/* Nome da Habilidade */}
-              <p className="text-white font-extrabold text-xs mt-2.5 truncate max-w-full">
-                {ability.name}
-              </p>
+              {/* Nome da Habilidade - Duas linhas com fonte menor e legível */}
+              <div className="flex-1 flex items-center justify-center mt-2.5">
+                <p className="text-white font-extrabold text-[10.5px] leading-tight max-w-full break-words">
+                  {ability.name}
+                </p>
+              </div>
 
-              {/* Custo de Mana */}
-              <p className={`text-[10px] font-semibold mt-1 transition-colors ${
-                isOutOfMana ? 'text-red-400 font-bold scale-105' : 'text-zinc-400'
+              {/* Custo de Mana / Tipo */}
+              <p className={`text-[9.5px] font-bold mt-1 font-mono ${
+                isOutOfMana ? 'text-[#FF2E63] animate-pulse' : 'text-zinc-500'
               }`}>
-                Mana: {ability.manaCost}
+                {ability.manaCost > 0 ? `${ability.manaCost} MP` : 'Passiva'}
               </p>
 
               {/* Cooldown SVG overlay radial swipe */}
               {cd > 0 && (
-                <div className="absolute inset-0 bg-black/85 flex items-center justify-center z-10">
+                <div className="absolute inset-0 bg-black/85 flex items-center justify-center z-10 rounded-[10px]">
                   <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 64 64">
                     <circle
                       cx="32"
                       cy="32"
                       r={radius}
                       fill="none"
-                      stroke="rgba(239, 68, 68, 0.4)"
+                      stroke="rgba(255, 46, 99, 0.4)"
                       strokeWidth={strokeWidth}
                       strokeDasharray={circumference}
                       strokeDashoffset={strokeDashoffset}
                     />
                   </svg>
-                  <span className="text-rose-400 font-extrabold text-lg drop-shadow-md z-20">
+                  <span className="text-[#FF2E63] font-black text-lg drop-shadow-md z-20 font-mono">
                     {Math.ceil(cd)}s
                   </span>
                 </div>
               )}
 
-              {/* Sem Mana Overlay */}
+              {/* Sem Mana Indicator sutil (não cobre tudo de ciano opaco) */}
               {isOutOfMana && (
-                <div className="absolute inset-0 bg-cyan-950/80 backdrop-filter backdrop-brightness-75 flex flex-col items-center justify-center z-10">
-                  <span className="text-red-500 font-extrabold text-[10px] tracking-wider uppercase animate-pulse">
+                <div className="absolute inset-0 bg-black/65 flex flex-col items-center justify-center z-10 rounded-[10px]">
+                  <span className="text-[#FF2E63] font-black text-[9px] tracking-wider uppercase animate-pulse">
                     SEM MANA
                   </span>
-                  <span className="text-cyan-400 font-bold text-xs mt-1">
+                  <span className="text-[#66FCF1] font-bold text-[9px] font-mono mt-0.5">
                     Requer {ability.manaCost}
                   </span>
                 </div>
