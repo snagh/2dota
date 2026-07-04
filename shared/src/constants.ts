@@ -1,22 +1,17 @@
-// Constantes globais do jogo MOBA 2D (2D.OTA)
-
 export const GAME_SETTINGS = {
-  // Configurações do Mapa 2D
   MAP: {
-    WIDTH: 2400,        // Largura total do mapa (eixo X)
-    HEIGHT: 2400,       // Altura total do mapa (eixo Y)
-    TILE_SIZE: 32,      // Tamanho do Tile
+    WIDTH: 2400,
+    HEIGHT: 2400,
+    TILE_SIZE: 32,      // Cada célula da grade A* tem 32x32 pixels
   },
-
-  // Configurações do Herói/Player
+  
   PLAYER: {
-    SPEED: 180,         // Velocidade de movimento em pixels por segundo
-    RADIUS: 24,         // Raio de colisão física
-    BASE_HP: 600,       // Vida inicial
-    BASE_MP: 300,       // Mana inicial
+    RADIUS: 20,
+    SPEED: 180,         // Pixels por segundo
+    BASE_HP: 600,
+    BASE_MP: 250,
   },
-
-  // Monstros Neutros (Creeps do Mato)
+  
   CREEPS: {
     RADIUS: 18,
     SPEED: 100,
@@ -100,6 +95,7 @@ export interface HeroAbility {
   healAmount?: number;
   speedBoost?: number;
   blinkDistance?: number;
+  description: string;
 }
 
 export interface HeroDefinition {
@@ -129,8 +125,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Acid Spray", manaCost: 120, cooldown: 12, damage: 25, range: 600, radius: 150, behavior: "TARGET_AOE", color: 0x86efac },
-      W: { name: "Chemical Rage", manaCost: 100, cooldown: 20, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", healAmount: 250, speedBoost: 100 }
+      Q: { name: "Acid Spray", manaCost: 120, cooldown: 12, damage: 25, range: 600, radius: 150, behavior: "TARGET_AOE", color: 0x86efac, description: "Dispara uma névoa ácida em uma grande área. Causa dano físico por segundo e reduz a armadura de todos os inimigos sob a névoa." },
+      W: { name: "Chemical Rage", manaCost: 100, cooldown: 20, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", healAmount: 250, speedBoost: 100, description: "Entra em fúria química. Concede regeneração massiva de HP e velocidade de movimento adicional por tempo limitado." }
     }
   },
   axe: {
@@ -143,8 +139,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Berserker's Call", manaCost: 110, cooldown: 10, damage: 40, range: 150, radius: 120, behavior: "TARGET_AOE", stunDuration: 2.0, color: 0xef4444 },
-      W: { name: "Battle Hunger", manaCost: 85, cooldown: 8, damage: 120, range: 450, radius: 40, behavior: "TARGET_AOE", color: 0xf97316 }
+      Q: { name: "Berserker's Call", manaCost: 110, cooldown: 10, damage: 40, range: 150, radius: 120, behavior: "TARGET_AOE", stunDuration: 2.0, color: 0xef4444, description: "Provoca unidades inimigas ao redor, forçando-as a atacar Axe e paralisando-as temporariamente." },
+      W: { name: "Battle Hunger", manaCost: 85, cooldown: 8, damage: 120, range: 450, radius: 40, behavior: "TARGET_AOE", color: 0xf97316, description: "Enraivece o inimigo com uma sede de batalha, causando dano contínuo e lentidão até que a duração acabe." }
     }
   },
   bristleback: {
@@ -157,8 +153,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Nasal Goo", manaCost: 30, cooldown: 3, damage: 20, range: 500, radius: 15, behavior: "SKILLSHOT", color: 0xa3e635 },
-      W: { name: "Quill Spray", manaCost: 40, cooldown: 4, damage: 85, range: 250, radius: 250, behavior: "TARGET_AOE", color: 0xe4e4e7 }
+      Q: { name: "Nasal Goo", manaCost: 30, cooldown: 3, damage: 20, range: 500, radius: 15, behavior: "SKILLSHOT", color: 0xa3e635, description: "Cobre o alvo com meleca nasal, diminuindo sua velocidade de movimento e reduzindo sua armadura." },
+      W: { name: "Quill Spray", manaCost: 40, cooldown: 4, damage: 85, range: 250, radius: 250, behavior: "TARGET_AOE", color: 0xe4e4e7, description: "Dispara uma chuva de espinhos em área. O dano aumenta progressivamente a cada acerto recente no mesmo alvo." }
     }
   },
   centaur: {
@@ -171,8 +167,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Hoof Stomp", manaCost: 115, cooldown: 12, damage: 100, range: 100, radius: 150, behavior: "TARGET_AOE", stunDuration: 2.5, color: 0xd97706 },
-      W: { name: "Double Edge", manaCost: 0, cooldown: 5, damage: 200, range: 150, radius: 80, behavior: "TARGET_AOE", color: 0xd97706 }
+      Q: { name: "Hoof Stomp", manaCost: 115, cooldown: 12, damage: 100, range: 100, radius: 150, behavior: "TARGET_AOE", stunDuration: 2.5, color: 0xd97706, description: "Pisa forte no chão, causando dano e atordoando inimigos ao redor por um longo período." },
+      W: { name: "Double Edge", manaCost: 0, cooldown: 5, damage: 200, range: 150, radius: 80, behavior: "TARGET_AOE", color: 0xd97706, description: "Desfere um golpe devastador de curta distância, causando alto dano em área ao custo de uma parte da vida do próprio herói." }
     }
   },
   chaos_knight: {
@@ -185,8 +181,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Chaos Bolt", manaCost: 110, cooldown: 10, damage: 150, range: 550, radius: 20, behavior: "SKILLSHOT", stunDuration: 2.0, color: 0xd97706 },
-      W: { name: "Phantasm", manaCost: 125, cooldown: 18, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", healAmount: 180, speedBoost: 60 }
+      Q: { name: "Chaos Bolt", manaCost: 110, cooldown: 10, damage: 150, range: 550, radius: 20, behavior: "SKILLSHOT", stunDuration: 2.0, color: 0xd97706, description: "Lança uma esfera caótica de energia que atordoa e causa dano aleatório ao inimigo atingido." },
+      W: { name: "Phantasm", manaCost: 125, cooldown: 18, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", healAmount: 180, speedBoost: 60, description: "Invoca ilusões do próprio herói que causam dano total e dividem a atenção dos adversários." }
     }
   },
   clockwerk: {
@@ -199,8 +195,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Battery Assault", manaCost: 90, cooldown: 12, damage: 95, range: 150, radius: 150, behavior: "TARGET_AOE", stunDuration: 0.5, color: 0xf59e0b },
-      W: { name: "Hookshot", manaCost: 120, cooldown: 20, damage: 150, range: 800, radius: 25, behavior: "SKILLSHOT", stunDuration: 1.5, color: 0x9ca3af }
+      Q: { name: "Battery Assault", manaCost: 90, cooldown: 12, damage: 95, range: 150, radius: 150, behavior: "TARGET_AOE", stunDuration: 0.5, color: 0xf59e0b, description: "Dispara estilhaços elétricos aleatórios a cada segundo em inimigos próximos, atordoando e causando dano contínuo." },
+      W: { name: "Hookshot", manaCost: 120, cooldown: 20, damage: 150, range: 800, radius: 25, behavior: "SKILLSHOT", stunDuration: 1.5, color: 0x9ca3af, description: "Dispara um gancho veloz em linha reta. Se atingir uma unidade, Clockwerk voa até ela, atordoando e danificando todos no trajeto." }
     }
   },
   dawnbreaker: {
@@ -213,8 +209,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Starbreaker", manaCost: 100, cooldown: 9, damage: 110, range: 200, radius: 120, behavior: "TARGET_AOE", stunDuration: 1.0, color: 0xfde047 },
-      W: { name: "Celestial Hammer", manaCost: 110, cooldown: 11, damage: 80, range: 600, radius: 30, behavior: "SKILLSHOT", color: 0xf59e0b }
+      Q: { name: "Starbreaker", manaCost: 100, cooldown: 9, damage: 110, range: 200, radius: 120, behavior: "TARGET_AOE", stunDuration: 1.0, color: 0xfde047, description: "Gira seu martelo três vezes no ar, causando dano a inimigos próximos e atordoando-os com o impacto final." },
+      W: { name: "Celestial Hammer", manaCost: 110, cooldown: 11, damage: 80, range: 600, radius: 30, behavior: "SKILLSHOT", color: 0xf59e0b, description: "Arremessa seu martelo criando um rastro de fogo. O martelo pode ser chamado de volta a qualquer momento, danificando os inimigos no caminho." }
     }
   },
   doom: {
@@ -227,8 +223,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Devour", manaCost: 70, cooldown: 14, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", healAmount: 200 },
-      W: { name: "Scorched Earth", manaCost: 110, cooldown: 15, damage: 30, range: 250, radius: 250, behavior: "SELF_BUFF", speedBoost: 70 }
+      Q: { name: "Devour", manaCost: 70, cooldown: 14, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", healAmount: 200, description: "Devora uma unidade inimiga ou neutra para digeri-la lentamente, regenerando vida e adquirindo ouro bônus." },
+      W: { name: "Scorched Earth", manaCost: 110, cooldown: 15, damage: 30, range: 250, radius: 250, behavior: "SELF_BUFF", speedBoost: 70, description: "Cobre o chão ao seu redor com chamas infernais. Concede velocidade de movimento bônus e causa dano por segundo a inimigos próximos." }
     }
   },
   dragon_knight: {
@@ -241,8 +237,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Breathe Fire", manaCost: 100, cooldown: 7, damage: 140, range: 500, radius: 60, behavior: "SKILLSHOT", color: 0xf97316 },
-      W: { name: "Dragon Tail", manaCost: 85, cooldown: 9, damage: 80, range: 150, radius: 80, behavior: "TARGET_AOE", stunDuration: 2.2, color: 0xeab308 }
+      Q: { name: "Breathe Fire", manaCost: 100, cooldown: 7, damage: 140, range: 500, radius: 60, behavior: "SKILLSHOT", color: 0xf97316, description: "Exala uma rajada de fogo em cone, causando dano mágico e reduzindo o poder de ataque físico dos inimigos atingidos." },
+      W: { name: "Dragon Tail", manaCost: 85, cooldown: 9, damage: 80, range: 150, radius: 80, behavior: "TARGET_AOE", stunDuration: 2.2, color: 0xeab308, description: "Desfere um golpe com seu escudo, atordoando o inimigo de perto e causando dano." }
     }
   },
   earth_spirit: {
@@ -255,8 +251,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Boulder Smash", manaCost: 100, cooldown: 10, damage: 120, range: 500, radius: 30, behavior: "SKILLSHOT", stunDuration: 1.5, color: 0x10b981 },
-      W: { name: "Rolling Boulder", manaCost: 70, cooldown: 6, damage: 90, range: 450, radius: 0, behavior: "BLINK", blinkDistance: 450 }
+      Q: { name: "Boulder Smash", manaCost: 100, cooldown: 10, damage: 120, range: 500, radius: 30, behavior: "SKILLSHOT", stunDuration: 1.5, color: 0x10b981, description: "Chuta uma rocha ou inimigo em linha reta, atordoando e causando dano a todos os inimigos atravessados." },
+      W: { name: "Rolling Boulder", manaCost: 70, cooldown: 6, damage: 90, range: 450, radius: 0, behavior: "BLINK", blinkDistance: 450, description: "Transforma-se em uma rocha rolante e avança em velocidade, colidindo com inimigos e parando atrás deles." }
     }
   },
 
@@ -271,8 +267,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Mana Void", manaCost: 150, cooldown: 15, damage: 180, range: 400, radius: 100, behavior: "TARGET_AOE", color: 0xa855f7 },
-      W: { name: "Blink", manaCost: 60, cooldown: 5, damage: 0, range: 500, radius: 0, behavior: "BLINK", blinkDistance: 500 }
+      Q: { name: "Mana Void", manaCost: 150, cooldown: 15, damage: 180, range: 400, radius: 100, behavior: "TARGET_AOE", color: 0xa855f7, description: "Cria um vácuo eletrostático que causa dano em área com base na mana que falta ao herói atingido." },
+      W: { name: "Blink", manaCost: 60, cooldown: 5, damage: 0, range: 500, radius: 0, behavior: "BLINK", blinkDistance: 500, description: "Teletransporta Anti-Mage por uma curta distância dentro do campo de batalha instantaneamente." }
     }
   },
   bloodseeker: {
@@ -285,8 +281,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Bloodrage", manaCost: 80, cooldown: 8, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", speedBoost: 90 },
-      W: { name: "Blood Rite", manaCost: 100, cooldown: 12, damage: 130, range: 600, radius: 160, behavior: "TARGET_AOE", color: 0xd97706 }
+      Q: { name: "Bloodrage", manaCost: 80, cooldown: 8, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", speedBoost: 90, description: "Entra em fúria de sangue, aumentando drasticamente sua velocidade de ataque ao custo de uma pequena queima de HP." },
+      W: { name: "Blood Rite", manaCost: 100, cooldown: 12, damage: 130, range: 600, radius: 160, behavior: "TARGET_AOE", color: 0xd97706, description: "Santifica uma área com runas de sangue. Após um atraso, as runas explodem silenciando e danificando inimigos na área." }
     }
   },
   bounty_hunter: {
@@ -299,8 +295,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Shuriken Toss", manaCost: 90, cooldown: 6, damage: 110, range: 650, radius: 15, behavior: "SKILLSHOT", color: 0xeab308 },
-      W: { name: "Shadow Walk", manaCost: 65, cooldown: 10, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", speedBoost: 75 }
+      Q: { name: "Shuriken Toss", manaCost: 90, cooldown: 6, damage: 110, range: 650, radius: 15, behavior: "SKILLSHOT", color: 0xeab308, description: "Arremessa uma shuriken afiada que causa dano e ricocheteia entre inimigos." },
+      W: { name: "Shadow Walk", manaCost: 65, cooldown: 10, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", speedBoost: 75, description: "Torna-se invisível temporariamente e concede velocidade bônus, permitindo se posicionar ou fugir." }
     }
   },
   broodmother: {
@@ -313,8 +309,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Spawn Spiderlings", manaCost: 120, cooldown: 10, damage: 130, range: 500, radius: 20, behavior: "SKILLSHOT", color: 0x22c55e },
-      W: { name: "Spin Web", manaCost: 80, cooldown: 15, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", healAmount: 150, speedBoost: 80 }
+      Q: { name: "Spawn Spiderlings", manaCost: 120, cooldown: 10, damage: 130, range: 500, radius: 20, behavior: "SKILLSHOT", color: 0x22c55e, description: "Injeta ovos de aranha no inimigo, causando dano. Se o alvo morrer logo após, pequenas aranhas nascem dele." },
+      W: { name: "Spin Web", manaCost: 80, cooldown: 15, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", healAmount: 150, speedBoost: 80, description: "Tece uma teia gigante no chão que cura Broodmother e concede velocidade de movimento massiva." }
     }
   },
   clinkz: {
@@ -327,8 +323,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 380,
     abilities: {
-      Q: { name: "Strafe", manaCost: 75, cooldown: 12, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", speedBoost: 120 },
-      W: { name: "Burning Barrage", manaCost: 90, cooldown: 7, damage: 140, range: 650, radius: 35, behavior: "SKILLSHOT", color: 0xf97316 }
+      Q: { name: "Strafe", manaCost: 75, cooldown: 12, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", speedBoost: 120, description: "Dispara uma sequência ultrarrápida de flechas de fogo, aumentando temporariamente sua velocidade de ataque de longo alcance." },
+      W: { name: "Burning Barrage", manaCost: 90, cooldown: 7, damage: 140, range: 650, radius: 35, behavior: "SKILLSHOT", color: 0xf97316, description: "Canaliza e dispara uma salva contínua de flechas flamejantes em linha reta, atravessando inimigos e causando dano." }
     }
   },
   drow_ranger: {
@@ -341,8 +337,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 380,
     abilities: {
-      Q: { name: "Frost Arrows", manaCost: 20, cooldown: 2, damage: 45, range: 625, radius: 15, behavior: "SKILLSHOT", color: 0x38bdf8 },
-      W: { name: "Gust", manaCost: 90, cooldown: 13, damage: 60, range: 500, radius: 80, behavior: "SKILLSHOT", color: 0xa5f3fc }
+      Q: { name: "Frost Arrows", manaCost: 20, cooldown: 2, damage: 45, range: 625, radius: 15, behavior: "SKILLSHOT", color: 0x38bdf8, description: "Encanta suas flechas com gelo ártico, causando dano adicional e aplicando lentidão de movimento ao alvo." },
+      W: { name: "Gust", manaCost: 90, cooldown: 13, damage: 60, range: 500, radius: 80, behavior: "SKILLSHOT", color: 0xa5f3fc, description: "Dispara uma forte rajada de vento que empurra inimigos para trás e silencia suas magias por alguns segundos." }
     }
   },
   ember_spirit: {
@@ -355,8 +351,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Searing Chains", manaCost: 110, cooldown: 11, damage: 90, range: 150, radius: 150, behavior: "TARGET_AOE", stunDuration: 2.0, color: 0xf97316 },
-      W: { name: "Sleight of Fist", manaCost: 75, cooldown: 6, damage: 110, range: 450, radius: 0, behavior: "BLINK", blinkDistance: 450 }
+      Q: { name: "Searing Chains", manaCost: 110, cooldown: 11, damage: 90, range: 150, radius: 150, behavior: "TARGET_AOE", stunDuration: 2.0, color: 0xf97316, description: "Dispara correntes de fogo que prendem até dois inimigos próximos no chão, imobilizando-os e causando dano." },
+      W: { name: "Sleight of Fist", manaCost: 75, cooldown: 6, damage: 110, range: 450, radius: 0, behavior: "BLINK", blinkDistance: 450, description: "Salta em velocidade e ataca todos os inimigos na área selecionada antes de retornar à sua posição original." }
     }
   },
   void: {
@@ -369,8 +365,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Time Walk", manaCost: 75, cooldown: 9, damage: 0, range: 450, radius: 0, behavior: "BLINK", blinkDistance: 450, healAmount: 120 },
-      W: { name: "Chronosphere", manaCost: 150, cooldown: 25, damage: 50, range: 500, radius: 180, behavior: "TARGET_AOE", stunDuration: 3.0, color: 0x8b5cf6 }
+      Q: { name: "Time Walk", manaCost: 75, cooldown: 9, damage: 0, range: 450, radius: 0, behavior: "BLINK", blinkDistance: 450, healAmount: 120, description: "Avança no tempo para se teletransportar a uma curta distância, revertendo qualquer dano sofrido nos últimos segundos." },
+      W: { name: "Chronosphere", manaCost: 150, cooldown: 25, damage: 50, range: 500, radius: 180, behavior: "TARGET_AOE", stunDuration: 3.0, color: 0x8b5cf6, description: "Cria uma redoma de vácuo temporal. Todas as unidades dentro da redoma ficam congeladas no tempo, exceto Void." }
     }
   },
   gyrocopter: {
@@ -383,8 +379,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 300,
     abilities: {
-      Q: { name: "Rocket Barrage", manaCost: 90, cooldown: 6, damage: 150, range: 200, radius: 200, behavior: "TARGET_AOE", color: 0xf59e0b },
-      W: { name: "Homing Missile", manaCost: 120, cooldown: 14, damage: 120, range: 700, radius: 25, behavior: "SKILLSHOT", stunDuration: 1.8, color: 0xef4444 }
+      Q: { name: "Rocket Barrage", manaCost: 90, cooldown: 6, damage: 150, range: 200, radius: 200, behavior: "TARGET_AOE", color: 0xf59e0b, description: "Dispara uma salva de foguetes aéreos a cada fração de segundo em alvos aleatórios ao seu redor." },
+      W: { name: "Homing Missile", manaCost: 120, cooldown: 14, damage: 120, range: 700, radius: 25, behavior: "SKILLSHOT", stunDuration: 1.8, color: 0xef4444, description: "Dispara um míssil teleguiado que persegue o alvo selecionado, atordoando-o e causando dano." }
     }
   },
   hoodwink: {
@@ -397,8 +393,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 350,
     abilities: {
-      Q: { name: "Acorn Shot", manaCost: 80, cooldown: 8, damage: 100, range: 600, radius: 20, behavior: "SKILLSHOT", color: 0x84cc16 },
-      W: { name: "Bushwhack", manaCost: 100, cooldown: 12, damage: 90, range: 550, radius: 120, behavior: "TARGET_AOE", stunDuration: 1.8, color: 0x22c55e }
+      Q: { name: "Acorn Shot", manaCost: 80, cooldown: 8, damage: 100, range: 600, radius: 20, behavior: "SKILLSHOT", color: 0x84cc16, description: "Dispara uma noz mágica em linha reta que causa dano e ricocheteia entre unidades próximas." },
+      W: { name: "Bushwhack", manaCost: 100, cooldown: 12, damage: 90, range: 550, radius: 120, behavior: "TARGET_AOE", stunDuration: 1.8, color: 0x22c55e, description: "Lança uma rede de caça. Inimigos na área são puxados para árvores próximas e atordoados." }
     }
   },
 
@@ -413,8 +409,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 320,
     abilities: {
-      Q: { name: "Cold Feet", manaCost: 120, cooldown: 10, damage: 80, range: 600, radius: 80, behavior: "TARGET_AOE", stunDuration: 2.0, color: 0x93c5fd },
-      W: { name: "Ice Vortex", manaCost: 85, cooldown: 4, damage: 60, range: 700, radius: 140, behavior: "TARGET_AOE", color: 0x60a5fa }
+      Q: { name: "Cold Feet", manaCost: 120, cooldown: 10, damage: 80, range: 600, radius: 80, behavior: "TARGET_AOE", stunDuration: 2.0, color: 0x93c5fd, description: "Congela os pés do inimigo. Causa dano por segundo e, se o alvo não se mover, ele é congelado." },
+      W: { name: "Ice Vortex", manaCost: 85, cooldown: 4, damage: 60, range: 700, radius: 140, behavior: "TARGET_AOE", color: 0x60a5fa, description: "Cria um vórtice de gelo no chão que reduz a velocidade de movimento e a resistência mágica dos adversários." }
     }
   },
   chen: {
@@ -427,8 +423,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 320,
     abilities: {
-      Q: { name: "Penitence", manaCost: 90, cooldown: 11, damage: 60, range: 600, radius: 20, behavior: "SKILLSHOT", color: 0xfef08a },
-      W: { name: "Hand of God", manaCost: 200, cooldown: 30, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", healAmount: 300 }
+      Q: { name: "Penitence", manaCost: 90, cooldown: 11, damage: 60, range: 600, radius: 20, behavior: "SKILLSHOT", color: 0xfef08a, description: "Reduz a velocidade do alvo e faz com que aliados ganhem velocidade de ataque contra ele." },
+      W: { name: "Hand of God", manaCost: 200, cooldown: 30, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", healAmount: 300, description: "Invoca o poder divino para curar instantaneamente Chen e todos os heróis aliados no mapa." }
     }
   },
   crystal_maiden: {
@@ -441,8 +437,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 320,
     abilities: {
-      Q: { name: "Crystal Nova", manaCost: 115, cooldown: 9, damage: 110, range: 600, radius: 150, behavior: "TARGET_AOE", color: 0x38bdf8 },
-      W: { name: "Frostbite", manaCost: 125, cooldown: 8, damage: 150, range: 500, radius: 80, behavior: "TARGET_AOE", stunDuration: 2.5, color: 0xbae6fd }
+      Q: { name: "Crystal Nova", manaCost: 115, cooldown: 9, damage: 110, range: 600, radius: 150, behavior: "TARGET_AOE", color: 0x38bdf8, description: "Cria uma explosão de gelo na área selecionada, causando dano mágico e aplicando lentidão de movimento e ataque." },
+      W: { name: "Frostbite", manaCost: 125, cooldown: 8, damage: 150, range: 500, radius: 80, behavior: "TARGET_AOE", stunDuration: 2.5, color: 0xbae6fd, description: "Envolve o inimigo em uma prisão de gelo sólido, imobilizando-o e causando dano contínuo." }
     }
   },
   dark_seer: {
@@ -455,8 +451,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: false,
     baseAttackRange: 60,
     abilities: {
-      Q: { name: "Vacuum", manaCost: 140, cooldown: 16, damage: 100, range: 500, radius: 160, behavior: "TARGET_AOE", color: 0xa855f7 },
-      W: { name: "Surge", manaCost: 50, cooldown: 10, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", speedBoost: 150 }
+      Q: { name: "Vacuum", manaCost: 140, cooldown: 16, damage: 100, range: 500, radius: 160, behavior: "TARGET_AOE", color: 0xa855f7, description: "Cria um vácuo poderoso que puxa todos os inimigos na área selecionada em direção ao centro." },
+      W: { name: "Surge", manaCost: 50, cooldown: 10, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", speedBoost: 150, description: "Energiza um herói aliado, concedendo velocidade de movimento máxima e imunidade a lentidões por tempo limitado." }
     }
   },
   dark_willow: {
@@ -469,8 +465,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 320,
     abilities: {
-      Q: { name: "Bramble Maze", manaCost: 120, cooldown: 14, damage: 80, range: 600, radius: 140, behavior: "TARGET_AOE", stunDuration: 1.5, color: 0x86efac },
-      W: { name: "Shadow Realm", manaCost: 90, cooldown: 12, damage: 130, range: 0, radius: 0, behavior: "SELF_BUFF", speedBoost: 60 }
+      Q: { name: "Bramble Maze", manaCost: 120, cooldown: 14, damage: 80, range: 600, radius: 140, behavior: "TARGET_AOE", stunDuration: 1.5, color: 0x86efac, description: "Cria um labirinto de espinhos na área. Inimigos que tocarem nos espinhos sofrem dano e ficam presos." },
+      W: { name: "Shadow Realm", manaCost: 90, cooldown: 12, damage: 130, range: 0, radius: 0, behavior: "SELF_BUFF", speedBoost: 60, description: "Entra no reino das sombras, tornando-se temporariamente intangível e acumulando dano para seu próximo ataque." }
     }
   },
   disruptor: {
@@ -483,8 +479,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 320,
     abilities: {
-      Q: { name: "Thunder Strike", manaCost: 110, cooldown: 10, damage: 140, range: 600, radius: 60, behavior: "TARGET_AOE", color: 0x60a5fa },
-      W: { name: "Kinetic Field", manaCost: 90, cooldown: 13, damage: 30, range: 550, radius: 120, behavior: "TARGET_AOE", stunDuration: 2.0, color: 0x1e3a8a }
+      Q: { name: "Thunder Strike", manaCost: 110, cooldown: 10, damage: 140, range: 600, radius: 60, behavior: "TARGET_AOE", color: 0x60a5fa, description: "Atinge o inimigo repetidamente com raios elétricos, causando dano a cada poucos segundos." },
+      W: { name: "Kinetic Field", manaCost: 90, cooldown: 13, damage: 30, range: 550, radius: 120, behavior: "TARGET_AOE", stunDuration: 2.0, color: 0x1e3a8a, description: "Cria uma barreira circular de energia cinética após un curto atraso, impedindo inimigos de entrar ou sair." }
     }
   },
   enchantress: {
@@ -497,8 +493,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 400,
     abilities: {
-      Q: { name: "Enchant", manaCost: 70, cooldown: 12, damage: 40, range: 500, radius: 30, behavior: "SKILLSHOT", color: 0x86efac },
-      W: { name: "Nature's Attendants", manaCost: 110, cooldown: 16, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", healAmount: 200 }
+      Q: { name: "Enchant", manaCost: 70, cooldown: 12, damage: 40, range: 500, radius: 30, behavior: "SKILLSHOT", color: 0x86efac, description: "Encanta um inimigo para aplicar lentidão de movimento ou domina temporariamente uma criatura neutra." },
+      W: { name: "Nature's Attendants", manaCost: 110, cooldown: 16, damage: 0, range: 0, radius: 0, behavior: "SELF_BUFF", healAmount: 200, description: "Invoca espíritos da floresta que flutuam ao redor de Enchantress, curando-a continuamente." }
     }
   },
   grimstroke: {
@@ -511,8 +507,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 320,
     abilities: {
-      Q: { name: "Stroke of Fate", manaCost: 110, cooldown: 8, damage: 130, range: 700, radius: 45, behavior: "SKILLSHOT", color: 0xef4444 },
-      W: { name: "Soulbind", manaCost: 150, cooldown: 18, damage: 100, range: 550, radius: 100, behavior: "TARGET_AOE", color: 0x7f1d1d }
+      Q: { name: "Stroke of Fate", manaCost: 110, cooldown: 8, damage: 130, range: 700, radius: 45, behavior: "SKILLSHOT", color: 0xef4444, description: "Pinta um rastro de tinta, causando dano e lentidão a todos os inimigos. O dano aumenta para cada inimigo atingido." },
+      W: { name: "Soulbind", manaCost: 150, cooldown: 18, damage: 100, range: 550, radius: 100, behavior: "TARGET_AOE", color: 0x7f1d1d, description: "Vincula o herói inimigo a um aliado próximo. Se qualquer um sofrer uma magia de alvo único, ambos a sofrem." }
     }
   },
   invoker: {
@@ -525,8 +521,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 320,
     abilities: {
-      Q: { name: "EMP", manaCost: 130, cooldown: 14, damage: 120, range: 600, radius: 160, behavior: "TARGET_AOE", color: 0xbae6fd },
-      W: { name: "Sun Strike", manaCost: 175, cooldown: 16, damage: 250, range: 2400, radius: 80, behavior: "TARGET_AOE", color: 0xf97316 }
+      Q: { name: "EMP", manaCost: 130, cooldown: 14, damage: 120, range: 600, radius: 160, behavior: "TARGET_AOE", color: 0xbae6fd, description: "Gera uma carga eletromagnética que queima a mana dos inimigos na área e causa dano equivalente." },
+      W: { name: "Sun Strike", manaCost: 175, cooldown: 16, damage: 250, range: 2400, radius: 80, behavior: "TARGET_AOE", color: 0xf97316, description: "Conjura um raio solar devastador do céu que atinge uma pequena área após 1.7s, causando dano puro altíssimo." }
     }
   },
   jakiro: {
@@ -539,10 +535,8 @@ export const HERO_CATALOG: Record<string, HeroDefinition> = {
     isRanged: true,
     baseAttackRange: 340,
     abilities: {
-      Q: { name: "Dual Breath", manaCost: 135, cooldown: 10, damage: 140, range: 500, radius: 70, behavior: "SKILLSHOT", color: 0xef4444 },
-      W: { name: "Ice Path", manaCost: 120, cooldown: 12, damage: 80, range: 600, radius: 30, behavior: "SKILLSHOT", stunDuration: 1.8, color: 0x60a5fa }
+      Q: { name: "Dual Breath", manaCost: 135, cooldown: 10, damage: 140, range: 500, radius: 70, behavior: "SKILLSHOT", color: 0xef4444, description: "Dispara uma onda de fogo e uma de gelo em cone. A de fogo queima inimigos e a de gelo causa lentidão." },
+      W: { name: "Ice Path", manaCost: 120, cooldown: 12, damage: 80, range: 600, radius: 30, behavior: "SKILLSHOT", stunDuration: 1.8, color: 0x60a5fa, description: "Cria um trilho de gelo sólido no chão. Qualquer inimigo que encostar no trilho é congelado e atordoado." }
     }
   }
 };
-
-

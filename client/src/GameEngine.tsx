@@ -652,42 +652,82 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
 
       {/* Barra de Ações Rápidas de Skillshot (HUD sobreposta ao PixiJS) */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex space-x-4 pointer-events-none">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex space-x-4 pointer-events-none z-50">
         
         {/* Habilidade Q */}
-        <div className="relative flex flex-col items-center bg-black/75 border border-zinc-800 px-4 py-3 rounded-2xl w-24 text-center">
-          <span className="absolute -top-3 bg-shonen-primary text-black font-extrabold text-xs px-2 py-0.5 rounded-full">
+        <div className="group relative flex flex-col items-center bg-black/80 border border-zinc-800 px-4 py-3 rounded-2xl w-24 text-center pointer-events-auto cursor-pointer hover:border-shonen-primary/50 transition-colors">
+          <span className="absolute -top-3 bg-shonen-primary text-black font-extrabold text-xs px-2 py-0.5 rounded-full shadow-glow">
             Q
           </span>
           <p className="text-white font-bold text-xs mt-1 truncate max-w-full">
             {activeHero.abilities.Q.name}
           </p>
-          <p className="text-[10px] text-zinc-500 font-semibold mt-1">
-            Custo: {activeHero.abilities.Q.manaCost}
+          <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">
+            Mana: {activeHero.abilities.Q.manaCost}
           </p>
           {qCooldown > 0 && (
             <div className="absolute inset-0 bg-black/85 flex items-center justify-center rounded-2xl">
               <span className="text-shonen-secondary font-extrabold text-lg">{qCooldown}s</span>
             </div>
           )}
+
+          {/* Tooltip Hover Premium */}
+          <div className="absolute bottom-full mb-3 hidden group-hover:flex flex-col bg-zinc-950/95 border border-zinc-800 p-3.5 rounded-xl w-64 text-left shadow-2xl transition-all duration-200 pointer-events-none">
+            <h4 className="font-extrabold text-sm text-shonen-primary mb-1">
+              {activeHero.abilities.Q.name}
+            </h4>
+            <p className="text-[9px] text-zinc-400 font-bold mb-2 uppercase tracking-wider">
+              {activeHero.abilities.Q.behavior === 'SKILLSHOT' ? '🎯 Skillshot Direcional' :
+               activeHero.abilities.Q.behavior === 'TARGET_AOE' ? '💥 Área de Efeito (AoE)' :
+               activeHero.abilities.Q.behavior === 'BLINK' ? '⚡ Teleporte/Blink' : '🛡️ Autocast / Self Buff'}
+            </p>
+            <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+              {activeHero.abilities.Q.description}
+            </p>
+            <div className="border-t border-zinc-800/80 mt-2.5 pt-2 flex justify-between text-[10px] font-mono text-zinc-400">
+              <span>Dano: <strong className="text-red-400">{activeHero.abilities.Q.damage || '0'}</strong></span>
+              <span>CD: <strong className="text-amber-400">{activeHero.abilities.Q.cooldown}s</strong></span>
+              <span>Alcance: <strong className="text-blue-400">{activeHero.abilities.Q.range || 'Global'}</strong></span>
+            </div>
+          </div>
         </div>
 
         {/* Habilidade W */}
-        <div className="relative flex flex-col items-center bg-black/75 border border-zinc-800 px-4 py-3 rounded-2xl w-24 text-center">
-          <span className="absolute -top-3 bg-shonen-primary text-black font-extrabold text-xs px-2 py-0.5 rounded-full">
+        <div className="group relative flex flex-col items-center bg-black/80 border border-zinc-800 px-4 py-3 rounded-2xl w-24 text-center pointer-events-auto cursor-pointer hover:border-shonen-primary/50 transition-colors">
+          <span className="absolute -top-3 bg-shonen-primary text-black font-extrabold text-xs px-2 py-0.5 rounded-full shadow-glow">
             W
           </span>
           <p className="text-white font-bold text-xs mt-1 truncate max-w-full">
             {activeHero.abilities.W.name}
           </p>
-          <p className="text-[10px] text-zinc-500 font-semibold mt-1">
-            Custo: {activeHero.abilities.W.manaCost}
+          <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">
+            Mana: {activeHero.abilities.W.manaCost}
           </p>
           {wCooldown > 0 && (
             <div className="absolute inset-0 bg-black/85 flex items-center justify-center rounded-2xl">
               <span className="text-shonen-secondary font-extrabold text-lg">{wCooldown}s</span>
             </div>
           )}
+
+          {/* Tooltip Hover Premium */}
+          <div className="absolute bottom-full mb-3 hidden group-hover:flex flex-col bg-zinc-950/95 border border-zinc-800 p-3.5 rounded-xl w-64 text-left shadow-2xl transition-all duration-200 pointer-events-none">
+            <h4 className="font-extrabold text-sm text-shonen-primary mb-1">
+              {activeHero.abilities.W.name}
+            </h4>
+            <p className="text-[9px] text-zinc-400 font-bold mb-2 uppercase tracking-wider">
+              {activeHero.abilities.W.behavior === 'SKILLSHOT' ? '🎯 Skillshot Direcional' :
+               activeHero.abilities.W.behavior === 'TARGET_AOE' ? '💥 Área de Efeito (AoE)' :
+               activeHero.abilities.W.behavior === 'BLINK' ? '⚡ Teleporte/Blink' : '🛡️ Autocast / Self Buff'}
+            </p>
+            <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+              {activeHero.abilities.W.description}
+            </p>
+            <div className="border-t border-zinc-800/80 mt-2.5 pt-2 flex justify-between text-[10px] font-mono text-zinc-400">
+              <span>Dano: <strong className="text-red-400">{activeHero.abilities.W.damage || '0'}</strong></span>
+              <span>CD: <strong className="text-amber-400">{activeHero.abilities.W.cooldown}s</strong></span>
+              <span>Alcance: <strong className="text-blue-400">{activeHero.abilities.W.range || 'Global'}</strong></span>
+            </div>
+          </div>
         </div>
 
       </div>
