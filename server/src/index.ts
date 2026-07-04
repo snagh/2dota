@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { RealTimeRoom } from './rooms/RealTimeRoom.js';
 import { TurnBasedRoom } from './rooms/TurnBasedRoom.js';
+import { ITEM_CATALOG } from './rooms/BaseRoom.js';
 import { type GameMode } from 'shared';
 
 const app = express();
@@ -39,6 +40,11 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Endpoint que retorna o catálogo de itens (para a loja no cliente)
+app.get('/items', (req, res) => {
+  res.json(ITEM_CATALOG);
+});
+
 io.on('connection', (socket: Socket) => {
   console.log(`Conectado: ${socket.id}`);
 
@@ -46,6 +52,16 @@ io.on('connection', (socket: Socket) => {
   socket.on('join_game', (data: { username: string; mode: GameMode; heroId?: string }) => {
     const isTurn = data.mode === 'TURN_BASED';
     const selectedRoom = isTurn ? turnRoom : normalRoom;
+
+    // ─── RECONEXÃO: tenta restaurar estado de desconexão anterior ───────────
+    const reconnected = selectedRoom.reconnectPlayer(socket.id, data.username);
+    if (reconnected) {
+      socketRooms.set(socket.id, selectedRoom);
+      socket.emit('joined_successfully', reconnected);
+      console.log(`[Reconexão] ${reconnected.username} retornou à partida.`);
+      return;
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     const newPlayer = selectedRoom.addPlayer(socket.id, data.username, data.heroId);
     socketRooms.set(socket.id, selectedRoom);
@@ -66,7 +82,7 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  // 3. Conjuração de Habilidade (Skillshot)
+  // 3. Conjuração de Habilidade (Skillshot / AoE / Blink / Buff)
   socket.on('cast_ability', (data: { key: 'Q' | 'W' | 'E' | 'R'; x: number; y: number }) => {
     const room = socketRooms.get(socket.id);
     if (room) {
@@ -82,15 +98,47 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  // 5. Desconexão do jogador
+  // 5. Compra de Item
+  socket.on('buy_item', (data: { itemId: string }) => {
+    const room = socketRooms.get(socket.id);
+    if (room) {
+      room.buyItem(socket.id, data.itemId);
+    }
+  });
+
+  // 6. Ativar Item
+  socket.on('activate_item', (data: { itemId: string; x?: number; y?: number }) => {
+    const room = socketRooms.get(socket.id);
+    if (room) {
+      room.activateItem(socket.id, data.itemId, data.x, data.y);
+    }
+  });
+
+  // 7. Dano no Roshan (jogador clica nele para atacar — o server valida distância)
+  socket.on('attack_roshan', () => {
+    const room = socketRooms.get(socket.id);
+    if (!room) return;
+    const player = room.players.get(socket.id);
+    if (!player || player.hp <= 0) return;
+    const rosh = room.roshan;
+    if (!rosh || !rosh.alive) return;
+    const dx = player.x - rosh.x;
+    const dy = player.y - rosh.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist <= player.attackRange + 200) {
+      room.damageRoshan(player.baseDamage, socket.id);
+    }
+  });
+
+  // 8. Desconexão com grace period
   socket.on('disconnect', () => {
     const room = socketRooms.get(socket.id);
     if (room) {
       const player = room.players.get(socket.id);
       const username = player ? player.username : socket.id;
-      console.log(`${username} desconectou do Modo ${room.roomName === 'turn_based' ? 'Turno' : 'Normal'}.`);
-      
-      room.removePlayer(socket.id);
+      console.log(`${username} desconectou — iniciando grace period.`);
+
+      room.handlePlayerDisconnect(socket.id);
       socketRooms.delete(socket.id);
     }
   });

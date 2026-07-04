@@ -32,10 +32,36 @@ export class RealTimeRoom extends BaseRoom {
   /**
    * Passo de simulação de física em tempo real
    */
+  // Controle de trickle de ouro (1 ouro por segundo por jogador)
+  private lastGoldTrickle: number = Date.now();
+
   private tick() {
     const now = Date.now();
     const dt = (now - this.lastTickTime) / 1000;
     this.lastTickTime = now;
+
+    // 0. Processar itens (regen passivo) e buffs ativos
+    this.processItemRegen(dt);
+
+    // 0.1 Trickle de ouro (1/s)
+    if (now - this.lastGoldTrickle >= 1000) {
+      this.lastGoldTrickle = now;
+      for (const player of this.players.values()) {
+        if (player.hp > 0 && !player.isDisconnected) {
+          this.addGold(player.id, 1);
+        }
+      }
+    }
+
+    // 0.2 Processar DoT (dano ao longo do tempo) e Slow dos buffs
+    for (const player of this.players.values()) {
+      if (player.hp <= 0 || player.isDisconnected) continue;
+      for (const buff of player.activeBuffs) {
+        if (buff.type === 'DOT' && buff.expiresAt > now) {
+          player.hp = Math.max(0, player.hp - buff.value * dt);
+        }
+      }
+    }
 
     // 1. Movimentação dos Jogadores ao longo dos waypoints / Auto-Ataques
     for (const player of this.players.values()) {
@@ -82,9 +108,12 @@ export class RealTimeRoom extends BaseRoom {
 
           if (distToTarget <= player.attackRange) {
             player.path = []; // Para de andar
-            
-            // Ataca se o cooldown de 1.0s tiver expirado
-            if (now - player.lastAttackTime > 1000) {
+
+            // Velocidade de ataque: 1000ms base, Gloves of Haste reduzem 20%
+            const attackInterval = player.items.includes('gloves') ? 800 : 1000;
+
+            // Ataca se o cooldown tiver expirado
+            if (now - player.lastAttackTime > attackInterval) {
               player.lastAttackTime = now;
 
               if (isRanged) {
@@ -166,8 +195,8 @@ export class RealTimeRoom extends BaseRoom {
       // 1.2 Processa a movimentação mecânica com velocidade dinâmica (com velocidade base e buffs)
       if (player.path && player.path.length > 0) {
         const nextWaypoint = player.path[0];
-        const heroDef = HERO_CATALOG[player.heroId];
-        let speed = heroDef ? heroDef.speed : GAME_SETTINGS.PLAYER.SPEED;
+        // player.speed já inclui bônus de itens (Boots, etc.)
+        let speed = player.speed;
 
         // Aplica os buffs de velocidade originais do Dota
         if (player.heroId === 'centaur' && this.isBuffActive(player, 'R', 8000)) {
@@ -178,6 +207,13 @@ export class RealTimeRoom extends BaseRoom {
           speed += 150; // Surge
         } else if (player.heroId === 'doom' && this.isBuffActive(player, 'W', 10000)) {
           speed += 70; // Scorched Earth
+        }
+
+        // Aplica slow de buffs ativos
+        const now2 = Date.now();
+        const slowBuff = player.activeBuffs.find(b => b.type === 'SLOW' && b.expiresAt > now2);
+        if (slowBuff) {
+          speed = speed * (1 - slowBuff.value);
         }
 
         const maxDist = speed * dt;
@@ -250,10 +286,17 @@ export class RealTimeRoom extends BaseRoom {
             }
           }
         } else {
-          // Ataque básico (reseta rota)
+          // Ataque básico com cooldown fixo de 1.5s (não mais aleatório)
           creep.path = [];
-          if (Math.random() < 0.05) {
+          const creepAny = creep as any;
+          if (now - (creepAny.lastAttackTime || 0) > 1500) {
+            creepAny.lastAttackTime = now;
             target.hp = Math.max(0, target.hp - GAME_SETTINGS.CREEPS.DAMAGE);
+            this.io.emit('unit_attacked', {
+              attackerId: creep.id,
+              targetId: target.id,
+              damage: GAME_SETTINGS.CREEPS.DAMAGE
+            });
             if (target.hp <= 0) {
               this.killPlayerInternal(target);
             }
@@ -433,9 +476,38 @@ export class RealTimeRoom extends BaseRoom {
               this.killPlayerInternal(target);
             }
           }
+          // Torres receberam dano — informa o delta
+          this.markTowersChanged();
         }
       }
     });
+
+    // 5. Roshan AI — ataca o herói mais próximo em raio de 350px a cada 2s
+    if (this.roshan.alive) {
+      let closestPlayer: ServerPlayer | null = null;
+      let closestDist = 350;
+      for (const player of this.players.values()) {
+        if (player.hp <= 0) continue;
+        const dx = player.x - this.roshan.x;
+        const dy = player.y - this.roshan.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < closestDist) { closestDist = d; closestPlayer = player; }
+      }
+      const roshAny = this.roshan as any;
+      if (closestPlayer && now - (roshAny.lastAttackTime || 0) > 2000) {
+        roshAny.lastAttackTime = now;
+        const roshDmg = 120;
+        closestPlayer.hp = Math.max(0, closestPlayer.hp - roshDmg);
+        this.io.emit('unit_attacked', {
+          attackerId: 'roshan',
+          targetId: closestPlayer.id,
+          damage: roshDmg
+        });
+        if (closestPlayer.hp <= 0) {
+          this.killPlayerInternal(closestPlayer);
+        }
+      }
+    }
 
     // Envia o estado completo no modo NORMAL
     this.sendGameState('NORMAL');

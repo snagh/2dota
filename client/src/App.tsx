@@ -30,6 +30,11 @@ export default function App() {
   const [playerXp, setPlayerXp] = useState(0);
   const [playerMaxXp, setPlayerMaxXp] = useState(100);
 
+  // Economia
+  const [playerGold, setPlayerGold] = useState(625);
+  const [showShop, setShowShop] = useState(false);
+  const [shopItems, setShopItems] = useState<Record<string, any>>({});
+
   // Estados do Modo Turno
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
   const [isNpcTurn, setIsNpcTurn] = useState(false);
@@ -52,6 +57,15 @@ export default function App() {
 
     newSocket.on('joined_successfully', () => {
       setJoined(true);
+      // Carrega catálogo de itens do servidor
+      fetch('http://localhost:3001/items')
+        .then(r => r.json())
+        .then(data => setShopItems(data))
+        .catch(() => {});
+    });
+
+    newSocket.on('gold_gained', (data: { amount: number; total: number }) => {
+      setPlayerGold(data.total);
     });
 
     // Monitora troca de turnos no servidor
@@ -107,6 +121,11 @@ export default function App() {
     if (socket && isMyTurn && !isNpcTurn) {
       socket.emit('end_turn');
     }
+  };
+
+  const handleBuyItem = (itemId: string) => {
+    if (!socket) return;
+    socket.emit('buy_item', { itemId });
   };
 
   // 1. Tela de Entrada / Login (Lobby com Seleção de Herói Premium)
@@ -331,14 +350,25 @@ export default function App() {
         </div>
       </div>
 
-      {/* HUD Superior Direito: Placar de KDA */}
-      <div className="absolute top-4 right-4 pointer-events-none">
+      {/* HUD Superior Direito: Placar de KDA + Gold */}
+      <div className="absolute top-4 right-4 pointer-events-none flex gap-3">
+        <div className="glass pointer-events-auto rounded-xl px-4 py-2.5 text-center border border-amber-800/30 bg-amber-950/20">
+          <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider mb-0.5">🪙 Ouro</p>
+          <p className="text-lg font-mono font-extrabold text-amber-400">{playerGold}</p>
+        </div>
         <div className="glass pointer-events-auto rounded-xl px-5 py-3 text-center border border-zinc-800">
           <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-0.5">Placar K/D</p>
           <p className="text-lg font-mono font-extrabold text-shonen-secondary">
             {playerKills} <span className="text-zinc-600 text-xs">/</span> {playerDeaths}
           </p>
         </div>
+        {/* Botão da Loja */}
+        <button
+          onClick={() => setShowShop(s => !s)}
+          className="glass pointer-events-auto rounded-xl px-4 py-2.5 border border-amber-700/40 bg-amber-900/10 hover:bg-amber-800/20 transition-all font-bold text-amber-400 text-sm"
+        >
+          🛒 Loja
+        </button>
       </div>
 
       {/* HUD Inferior Esquerdo: Atributos Vitais (HP/MP) */}
@@ -457,6 +487,36 @@ export default function App() {
           </div>
         )}
       </div>
+      {/* LOJA DE ITENS (toggle) */}
+      {showShop && (
+        <div className="absolute top-20 right-4 z-50 glass rounded-2xl p-5 border border-amber-700/30 w-80 shadow-2xl pointer-events-auto">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-extrabold text-amber-400 text-sm uppercase tracking-wider">🛒 Loja de Itens</h3>
+            <button onClick={() => setShowShop(false)} className="text-zinc-500 hover:text-zinc-300 text-xs font-bold">✕ Fechar</button>
+          </div>
+          <div className="grid grid-cols-1 gap-2 max-h-96 overflow-y-auto pr-1">
+            {Object.values(shopItems).map((item: any) => (
+              <div key={item.id} className="flex items-center justify-between bg-zinc-900/60 rounded-xl p-3 border border-zinc-800 hover:border-amber-700/40 transition-all">
+                <div className="flex-1 min-w-0 mr-3">
+                  <p className="font-bold text-xs text-zinc-200 truncate">{item.name}</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5 leading-relaxed">{item.description}</p>
+                  {item.isActive && (
+                    <span className="text-[9px] text-amber-400 font-bold uppercase tracking-wider">⚡ ATIVO — CD: {item.cooldown}s</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleBuyItem(item.id)}
+                  disabled={playerGold < item.cost}
+                  className="flex-shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-30 disabled:pointer-events-none text-black font-extrabold text-[10px] rounded-lg uppercase transition-all"
+                >
+                  {item.cost}🪙
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="text-[9px] text-zinc-600 mt-3 text-center">Saldo: <span className="text-amber-400 font-bold">{playerGold} ouro</span></p>
+        </div>
+      )}
 
     </div>
   );

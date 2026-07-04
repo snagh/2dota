@@ -96,6 +96,11 @@ export interface HeroAbility {
   speedBoost?: number;
   blinkDistance?: number;
   description: string;
+  // Composição de efeitos — Fase 3
+  slowDuration?: number;    // Duração do slow em ms
+  slowAmount?: number;      // Percentual de redução de velocidade (0.0-1.0)
+  dotDamage?: number;       // Dano por segundo do DoT
+  dotDuration?: number;     // Duração do DoT em ms
 }
 
 export interface HeroDefinition {

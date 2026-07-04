@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
 import { Socket } from 'socket.io-client';
-import { GAME_SETTINGS, HERO_CATALOG, getObstacleGrid, type Vector2D } from 'shared';
+import { GAME_SETTINGS, HERO_CATALOG, getObstacleGrid, findPath, type Vector2D } from 'shared';
 
 interface GameEngineProps {
   socket: Socket | null;
@@ -24,14 +24,58 @@ interface GameEngineProps {
   ) => void;
 }
 
+// ─── Types for new features ─────────────────────────────────────────────────
+interface FloatingText {
+  text: string;
+  x: number;
+  y: number;
+  createdAt: number;
+  duration: number;
+  color: number;
+}
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  color: number;
+  life: number;
+  maxLife: number;
+}
+
 export default function GameEngine({ socket, username, onUpdatePlayerStats }: GameEngineProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<PIXI.Application | null>(null);
-  
+  const minimapRef = useRef<HTMLCanvasElement>(null);
+
   // Referências mutáveis para o loop do PixiJS (evita closures e re-renders)
   const gameStateRef = useRef<any>(null);
   const mouseScreenPos = useRef<Vector2D>({ x: 0, y: 0 });
   const localPlayerId = useRef<string>('');
+
+  // ── FASE 1: Client-Side Prediction ──────────────────────────────────────
+  const predictedPosRef = useRef<{ x: number; y: number } | null>(null);
+  const predictedPathRef = useRef<{ x: number; y: number }[]>([]);
+
+  // ── FASE 4: Floating Combat Text ─────────────────────────────────────────
+  const floatingTexts = useRef<FloatingText[]>([]);
+  const fctIndexRef = useRef(0);
+
+  // ── FASE 4: Screen Shake ─────────────────────────────────────────────────
+  const screenShake = useRef({ intensity: 0, decayMs: 0 });
+
+  // ── FASE 4: Particles ────────────────────────────────────────────────────
+  const particles = useRef<Particle[]>([]);
+
+  // ── FASE 4: Hit-Stop ─────────────────────────────────────────────────────
+  const hitStopUntil = useRef(0);
+
+  // ── FASE 4: Ability Range Preview ────────────────────────────────────────
+  const holdingKey = useRef<string | null>(null);
+
+  // ── Tower Cache ───────────────────────────────────────────────────────────
+  const cachedTowersRef = useRef<any[]>([]);
 
   // Estados locais para renderizar na UI do HUD do React
   const [qCooldown, setQCooldown] = useState(0);
@@ -52,7 +96,7 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       resolution: window.devicePixelRatio || 1,
       autoDensity: true,
     });
-    
+
     appRef.current = app;
     containerRef.current.appendChild(app.view as HTMLCanvasElement);
 
@@ -82,7 +126,7 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     const gridGraphic = new PIXI.Graphics();
     gridGraphic.lineStyle(1, 0x181822, 1);
     const tileSize = GAME_SETTINGS.MAP.TILE_SIZE;
-    
+
     // Desenha linhas verticais
     for (let x = 0; x <= GAME_SETTINGS.MAP.WIDTH; x += tileSize) {
       gridGraphic.moveTo(x, 0);
@@ -93,7 +137,7 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       gridGraphic.moveTo(0, y);
       gridGraphic.lineTo(GAME_SETTINGS.MAP.WIDTH, y);
     }
-    
+
     // Contorno do Mapa
     gridGraphic.lineStyle(8, 0xff5a1f, 0.4);
     gridGraphic.drawRect(0, 0, GAME_SETTINGS.MAP.WIDTH, GAME_SETTINGS.MAP.HEIGHT);
@@ -140,6 +184,10 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
 
     // 4. Receber Estado do Servidor e Eventos de Combate
     socket.on('game_state', (state: any) => {
+      // Cache towers when they arrive (towers may be sparse in updates)
+      if (state.towers && Array.isArray(state.towers) && state.towers.length > 0) {
+        cachedTowersRef.current = state.towers;
+      }
       gameStateRef.current = state;
     });
 
@@ -156,14 +204,47 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
           createdAt: Date.now(),
           duration: 1000
         });
+
+        // FCT: +LEVEL in green
+        floatingTexts.current.push({
+          text: `+LEVEL ${data.level}!`,
+          x: p.x,
+          y: p.y - 30,
+          createdAt: Date.now(),
+          duration: 1200,
+          color: 0x22c55e
+        });
       }
     });
 
     socket.on('unit_attacked', (data: { attackerId: string; targetId: string; damage: number; melee?: boolean }) => {
+      const state = gameStateRef.current;
+      const target = state
+        ? (state.players.find((x: any) => x.id === data.targetId) ||
+           (state.creeps && state.creeps.find((x: any) => x.id === data.targetId)))
+        : null;
+
+      // FCT: -damage in red/yellow
+      const targetX = target ? target.x : 0;
+      const targetY = target ? target.y : 0;
+      if (target) {
+        floatingTexts.current.push({
+          text: `-${data.damage}`,
+          x: targetX + (Math.random() - 0.5) * 20,
+          y: targetY - 20,
+          createdAt: Date.now(),
+          duration: 900,
+          color: data.damage > 80 ? 0xffd200 : 0xef4444
+        });
+      }
+
+      // Screen Shake: if local player is the target
+      if (data.targetId === localPlayerId.current) {
+        screenShake.current.intensity = 8;
+        screenShake.current.decayMs = 200;
+      }
+
       if (data.melee) {
-        const state = gameStateRef.current;
-        if (!state) return;
-        const target = state.players.find((x: any) => x.id === data.targetId) || state.creeps.find((x: any) => x.id === data.targetId);
         if (target) {
           visualEffects.push({
             type: 'MELEE_SLASH',
@@ -172,6 +253,26 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
             createdAt: Date.now(),
             duration: 150
           });
+
+          // Particle Burst on melee impact
+          for (let i = 0; i < 8; i++) {
+            const angle = (Math.PI * 2 * i) / 8 + (Math.random() - 0.5) * 0.5;
+            const speed = 60 + Math.random() * 80;
+            particles.current.push({
+              x: target.x,
+              y: target.y,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              color: 0xef4444,
+              life: 0.35 + Math.random() * 0.2,
+              maxLife: 0.35 + Math.random() * 0.2
+            });
+          }
+        }
+
+        // Hit-Stop: if local player is the attacker
+        if (data.attackerId === localPlayerId.current) {
+          hitStopUntil.current = Date.now() + 60;
         }
       }
     });
@@ -195,12 +296,25 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
 
         socket.emit('move', { x: worldX, y: worldY });
 
-        // Determina se o clique direito focou um inimigo (creep ou player inimigo)
-        let isEnemyClicked = false;
+        // Client-side prediction: compute path and start moving immediately
         const state = gameStateRef.current;
         if (state) {
+          const lp = state.players.find((p: any) => p.id === localPlayerId.current);
+          if (lp) {
+            const startPos = predictedPosRef.current || { x: lp.x, y: lp.y };
+            const path = findPath(startPos, { x: worldX, y: worldY });
+            predictedPathRef.current = path;
+            if (!predictedPosRef.current) {
+              predictedPosRef.current = { x: lp.x, y: lp.y };
+            }
+          }
+        }
+
+        // Determina se o clique direito focou um inimigo (creep ou player inimigo)
+        let isEnemyClicked = false;
+        if (state) {
           const clickRadius = 64;
-          const targetCreep = state.creeps.find(
+          const targetCreep = state.creeps && state.creeps.find(
             (c: any) => c.hp > 0 && Math.sqrt(Math.pow(c.x - worldX, 2) + Math.pow(c.y - worldY, 2)) < clickRadius
           );
           let targetEnemyPlayer = null;
@@ -235,13 +349,16 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     const handleWindowKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toUpperCase() as 'Q' | 'W' | 'E' | 'R';
       if (key === 'Q' || key === 'W' || key === 'E' || key === 'R') {
+        // Set holdingKey for range preview BEFORE sending cast
+        holdingKey.current = key;
+
         const now = Date.now();
         let readyTime = 0;
         if (key === 'Q') readyTime = qReadyTime;
         else if (key === 'W') readyTime = wReadyTime;
         else if (key === 'E') readyTime = eReadyTime;
         else if (key === 'R') readyTime = rReadyTime;
-        
+
         if (now < readyTime) return; // Em cooldown
 
         // Smart Cast: Conjura habilidade na direção do mouse
@@ -271,17 +388,150 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       }
     };
 
+    const handleWindowKeyUp = (e: KeyboardEvent) => {
+      const key = e.key.toUpperCase();
+      if (key === holdingKey.current) {
+        holdingKey.current = null;
+      }
+    };
+
     window.addEventListener('mousemove', handleWindowMouseMove);
     window.addEventListener('mousedown', handleWindowMouseDown);
     window.addEventListener('keydown', handleWindowKeyDown);
+    window.addEventListener('keyup', handleWindowKeyUp);
+
+    // ── Minimap setInterval ───────────────────────────────────────────────
+    let lastShakeTime = Date.now();
+    const minimapInterval = setInterval(() => {
+      const canvas = minimapRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const state = gameStateRef.current;
+
+      const W = 200;
+      const H = 200;
+      const scaleX = W / GAME_SETTINGS.MAP.WIDTH;
+      const scaleY = H / GAME_SETTINGS.MAP.HEIGHT;
+
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, W, H);
+
+      // Draw a subtle grid tint
+      ctx.fillStyle = 'rgba(30,30,50,0.5)';
+      ctx.fillRect(0, 0, W, H);
+
+      if (state) {
+        // Draw players
+        state.players.forEach((p: any) => {
+          const mx = p.x * scaleX;
+          const my = p.y * scaleY;
+          const isLocal = p.id === localPlayerId.current;
+
+          if (isLocal) {
+            // Bright white with square border
+            ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(mx - 4, my - 4, 8, 8);
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(mx, my, 4, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.fillStyle = p.team === 1 ? '#22c55e' : '#ef4444';
+            ctx.beginPath();
+            ctx.arc(mx, my, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+
+        // Draw Roshan if alive
+        if (state.roshan && state.roshan.hp > 0) {
+          const mx = state.roshan.x * scaleX;
+          const my = state.roshan.y * scaleY;
+          ctx.fillStyle = '#facc15';
+          ctx.beginPath();
+          ctx.arc(mx, my, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // White border outline
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(0, 0, W, H);
+    }, 200);
 
     // 6. Pixi Ticker (Loop de Renderização a 60 FPS com Interpolação local)
-    app.ticker.add(() => {
+    app.ticker.add((delta) => {
       const state = gameStateRef.current;
       if (!state) return;
 
+      const nowMs = Date.now();
+
+      // ── Hit-Stop check ────────────────────────────────────────────────
+      const isHitStopped = nowMs < hitStopUntil.current;
+
       // Localiza o jogador local
       const localPlayer = state.players.find((p: any) => p.id === localPlayerId.current);
+
+      if (!isHitStopped) {
+        // ── FASE 1: Advance predicted position along path ───────────────
+        if (localPlayer && predictedPosRef.current && predictedPathRef.current.length > 0) {
+          const speed = (localPlayer.speed || 300) * (delta / 60);
+          let remaining = speed;
+          const path = predictedPathRef.current;
+
+          while (remaining > 0 && path.length > 0) {
+            const next = path[0];
+            const dx: number = next.x - predictedPosRef.current.x;
+            const dy: number = next.y - predictedPosRef.current.y;
+            const dist: number = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist <= remaining) {
+              predictedPosRef.current = { x: next.x, y: next.y };
+              path.shift();
+              remaining -= dist;
+            } else {
+              const ratio = remaining / dist;
+              predictedPosRef.current = {
+                x: predictedPosRef.current.x + dx * ratio,
+                y: predictedPosRef.current.y + dy * ratio
+              };
+              remaining = 0;
+            }
+          }
+
+          // Reconciliation with server position
+          if (localPlayer) {
+            const divergeX = localPlayer.x - predictedPosRef.current.x;
+            const divergeY = localPlayer.y - predictedPosRef.current.y;
+            const divergeDist = Math.sqrt(divergeX * divergeX + divergeY * divergeY);
+
+            if (divergeDist > 64) {
+              // Snap to server
+              predictedPosRef.current = { x: localPlayer.x, y: localPlayer.y };
+              predictedPathRef.current = [];
+            } else {
+              // Lerp toward server
+              predictedPosRef.current.x += divergeX * 0.15;
+              predictedPosRef.current.y += divergeY * 0.15;
+            }
+          }
+        } else if (localPlayer && predictedPosRef.current && predictedPathRef.current.length === 0) {
+          // Path exhausted; reconcile toward server
+          const divergeX = localPlayer.x - predictedPosRef.current.x;
+          const divergeY = localPlayer.y - predictedPosRef.current.y;
+          const divergeDist = Math.sqrt(divergeX * divergeX + divergeY * divergeY);
+          if (divergeDist > 64) {
+            predictedPosRef.current = null;
+          } else if (divergeDist > 1) {
+            predictedPosRef.current.x += divergeX * 0.15;
+            predictedPosRef.current.y += divergeY * 0.15;
+          }
+        }
+      }
+
       if (localPlayer) {
         // Envia estatísticas de volta para o componente HUD do React
         onUpdatePlayerStats(
@@ -301,14 +551,31 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
           localPlayer.maxXp || 100
         );
 
-        // Suaviza a Câmera seguindo o jogador local
-        worldContainer.pivot.x += (localPlayer.x - worldContainer.pivot.x) * 0.15;
-        worldContainer.pivot.y += (localPlayer.y - worldContainer.pivot.y) * 0.15;
+        // Use predicted position for camera pivot (when available)
+        const camX = predictedPosRef.current ? predictedPosRef.current.x : localPlayer.x;
+        const camY = predictedPosRef.current ? predictedPosRef.current.y : localPlayer.y;
+
+        // Suaviza a Câmera seguindo o jogador local (via predicted pos)
+        worldContainer.pivot.x += (camX - worldContainer.pivot.x) * 0.15;
+        worldContainer.pivot.y += (camY - worldContainer.pivot.y) * 0.15;
       }
 
       // Centraliza câmera na viewport da tela
       worldContainer.position.x = app.screen.width / 2;
       worldContainer.position.y = app.screen.height / 2;
+
+      // ── Screen Shake ──────────────────────────────────────────────────
+      if (screenShake.current.intensity > 0) {
+        const shakeX = (Math.random() - 0.5) * 2 * screenShake.current.intensity;
+        const shakeY = (Math.random() - 0.5) * 2 * screenShake.current.intensity;
+        worldContainer.position.x += shakeX;
+        worldContainer.position.y += shakeY;
+
+        const elapsed = nowMs - lastShakeTime;
+        const decayRate = screenShake.current.intensity / (screenShake.current.decayMs / 16.67);
+        screenShake.current.intensity = Math.max(0, screenShake.current.intensity - decayRate * delta);
+      }
+      lastShakeTime = nowMs;
 
       // Conjunto de IDs presentes neste tick para limpeza dos expirados
       const activeIds = new Set<string>();
@@ -331,6 +598,33 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
         rangeGraphic.endFill();
       }
 
+      // ── FASE 4: Ability Range Preview ──────────────────────────────────
+      const abilityRangeId = 'ability_range_preview';
+      let abilityRangeGraphic = graphicsPool.get(abilityRangeId);
+      if (!abilityRangeGraphic) {
+        abilityRangeGraphic = new PIXI.Graphics();
+        gridLayer.addChild(abilityRangeGraphic);
+        graphicsPool.set(abilityRangeId, abilityRangeGraphic);
+      }
+      abilityRangeGraphic.clear();
+      activeIds.add(abilityRangeId);
+
+      if (holdingKey.current && localPlayer) {
+        const heroDef = HERO_CATALOG[localPlayer.heroId || 'axe'];
+        if (heroDef) {
+          const abilityKey = holdingKey.current as 'Q' | 'W' | 'E' | 'R';
+          const ability = heroDef.abilities[abilityKey];
+          if (ability && ability.range && ability.range > 0) {
+            const posX = predictedPosRef.current ? predictedPosRef.current.x : localPlayer.x;
+            const posY = predictedPosRef.current ? predictedPosRef.current.y : localPlayer.y;
+            abilityRangeGraphic.lineStyle(2, 0x818cf8, 0.55);
+            abilityRangeGraphic.beginFill(0x818cf8, 0.06);
+            abilityRangeGraphic.drawCircle(posX, posY, ability.range);
+            abilityRangeGraphic.endFill();
+          }
+        }
+      }
+
       // Desenha a rota (caminho planejado A*) do jogador local
       const pathId = 'local_player_path';
       let pathGraphic = graphicsPool.get(pathId);
@@ -342,22 +636,32 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       pathGraphic.clear();
       activeIds.add(pathId);
 
-      if (localPlayer && localPlayer.path && localPlayer.path.length > 0) {
+      // Draw predicted path
+      const predPath = predictedPathRef.current;
+      const predPos = predictedPosRef.current;
+      if (localPlayer && predPos && predPath.length > 0) {
         pathGraphic.lineStyle(2, 0xffd200, 0.45); // Amarelo suave
+        pathGraphic.moveTo(predPos.x, predPos.y);
+        predPath.forEach((pt: any) => {
+          pathGraphic!.lineTo(pt.x, pt.y);
+        });
+        predPath.forEach((pt: any) => {
+          pathGraphic!.beginFill(0xffd200, 0.7);
+          pathGraphic!.drawCircle(pt.x, pt.y, 3);
+          pathGraphic!.endFill();
+        });
+      } else if (localPlayer && localPlayer.path && localPlayer.path.length > 0) {
+        pathGraphic.lineStyle(2, 0xffd200, 0.45);
         pathGraphic.moveTo(localPlayer.x, localPlayer.y);
         localPlayer.path.forEach((pt: any) => {
           pathGraphic!.lineTo(pt.x, pt.y);
         });
-        
-        // Desenha pequenas bolinhas nos waypoints
         localPlayer.path.forEach((pt: any) => {
           pathGraphic!.beginFill(0xffd200, 0.7);
           pathGraphic!.drawCircle(pt.x, pt.y, 3);
           pathGraphic!.endFill();
         });
       }
-
-
 
       // 6.1 RENDERIZAR JOGADORES
       state.players.forEach((player: any) => {
@@ -373,8 +677,13 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
 
         // Limpa e redesenha o círculo do herói
         g.clear();
-        
+
         const isSelf = id === localPlayerId.current;
+
+        // Use predicted position for local player
+        const drawX = isSelf && predictedPosRef.current ? predictedPosRef.current.x : player.x;
+        const drawY = isSelf && predictedPosRef.current ? predictedPosRef.current.y : player.y;
+
         const heroDef = HERO_CATALOG[player.heroId];
         let attributeColor = 0xa855f7; // Roxo padrão
         if (heroDef) {
@@ -382,24 +691,24 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
           else if (heroDef.attribute === 'AGI') attributeColor = 0x10b981; // Verde
           else if (heroDef.attribute === 'INT') attributeColor = 0x3b82f6; // Azul
         }
-        
+
         // Sombra de brilho sob o herói
         g.beginFill(attributeColor, 0.15);
-        g.drawCircle(player.x, player.y, GAME_SETTINGS.PLAYER.RADIUS + 6);
+        g.drawCircle(drawX, drawY, GAME_SETTINGS.PLAYER.RADIUS + 6);
         g.endFill();
 
         // Círculo principal
         g.beginFill(attributeColor);
         g.lineStyle(2.5, player.team === 1 ? 0x22c55e : 0xe11d48, 0.95);
-        g.drawCircle(player.x, player.y, GAME_SETTINGS.PLAYER.RADIUS);
+        g.drawCircle(drawX, drawY, GAME_SETTINGS.PLAYER.RADIUS);
         g.endFill();
 
         // Barra de Vida
         const barWidth = 50;
         const barHeight = 6;
-        const barX = player.x - barWidth / 2;
-        const barY = player.y - GAME_SETTINGS.PLAYER.RADIUS - 16;
-        
+        const barX = drawX - barWidth / 2;
+        const barY = drawY - GAME_SETTINGS.PLAYER.RADIUS - 16;
+
         g.lineStyle(0);
         g.beginFill(0x1f2937); // Fundo cinza
         g.drawRect(barX, barY, barWidth, barHeight);
@@ -409,6 +718,25 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
         g.beginFill(0x10b981); // Verde de vida
         g.drawRect(barX, barY, barWidth * hpPercentage, barHeight);
         g.endFill();
+
+        // ── FASE 4: Buff/Debuff Bar above HP bar (local player only) ────
+        if (isSelf && player.activeBuffs && player.activeBuffs.length > 0) {
+          const buffSize = 12;
+          const buffPadding = 2;
+          const buffStartY = barY - buffSize - 4;
+          player.activeBuffs.forEach((buff: string, idx: number) => {
+            let buffColor = 0x6b7280;
+            if (buff === 'SLOW') buffColor = 0x3b82f6;       // blue
+            else if (buff === 'DOT') buffColor = 0xef4444;   // red
+            else if (buff === 'SPEED_BOOST') buffColor = 0x22c55e; // green
+
+            const buffX = drawX - (player.activeBuffs.length * (buffSize + buffPadding)) / 2 + idx * (buffSize + buffPadding);
+            g!.beginFill(buffColor, 0.85);
+            g!.lineStyle(1, 0xffffff, 0.4);
+            g!.drawRect(buffX, buffStartY, buffSize, buffSize);
+            g!.endFill();
+          });
+        }
 
         // Nome de jogador por cima
         let t = textPool.get(id + '_text');
@@ -426,87 +754,93 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
           uiLayer.addChild(t);
           textPool.set(id + '_text', t);
         }
-        t.position.set(player.x, player.y - GAME_SETTINGS.PLAYER.RADIUS - 26);
+        t.position.set(drawX, drawY - GAME_SETTINGS.PLAYER.RADIUS - 26);
         t.text = displayName;
         t.alpha = player.hp <= 0 ? 0.3 : 1;
       });
 
       // 6.2 RENDERIZAR CREEPS (Monstros Neutros) E ILUSÕES
-      state.creeps.forEach((creep: any) => {
-        const id = creep.id;
-        activeIds.add(id);
+      if (state.creeps) {
+        state.creeps.forEach((creep: any) => {
+          const id = creep.id;
+          activeIds.add(id);
 
-        let g = graphicsPool.get(id);
-        if (!g) {
-          g = new PIXI.Graphics();
-          entitiesLayer.addChild(g);
-          graphicsPool.set(id, g);
-        }
-
-        g.clear();
-        if (creep.isIllusion) {
-          let illColor = 0xa855f7; // Roxo padrão
-          const ownerHero = HERO_CATALOG[creep.heroId || 'axe'];
-          if (ownerHero) {
-            if (ownerHero.attribute === 'STR') illColor = 0xef4444;
-            else if (ownerHero.attribute === 'AGI') illColor = 0x10b981;
-            else if (ownerHero.attribute === 'INT') illColor = 0x3b82f6;
+          let g = graphicsPool.get(id);
+          if (!g) {
+            g = new PIXI.Graphics();
+            entitiesLayer.addChild(g);
+            graphicsPool.set(id, g);
           }
-          g.beginFill(illColor, 0.45); // Translúcido
-          g.lineStyle(2, 0xffffff, 0.5);
-          g.drawCircle(creep.x, creep.y, creep.radius);
+
+          g.clear();
+          if (creep.isIllusion) {
+            let illColor = 0xa855f7; // Roxo padrão
+            const ownerHero = HERO_CATALOG[creep.heroId || 'axe'];
+            if (ownerHero) {
+              if (ownerHero.attribute === 'STR') illColor = 0xef4444;
+              else if (ownerHero.attribute === 'AGI') illColor = 0x10b981;
+              else if (ownerHero.attribute === 'INT') illColor = 0x3b82f6;
+            }
+            g.beginFill(illColor, 0.45); // Translúcido
+            g.lineStyle(2, 0xffffff, 0.5);
+            g.drawCircle(creep.x, creep.y, creep.radius);
+            g.endFill();
+
+            // Nome de ilusão por cima
+            let t = textPool.get(id + '_text');
+            const displayName = `${ownerHero ? ownerHero.name : 'Hero'} (Ilusão)`;
+            if (!t) {
+              t = new PIXI.Text(displayName, {
+                fontFamily: 'Space Grotesk',
+                fontSize: 10,
+                fill: 0x93c5fd,
+                align: 'center',
+              });
+              t.anchor.set(0.5);
+              uiLayer.addChild(t);
+              textPool.set(id + '_text', t);
+            }
+            t.position.set(creep.x, creep.y - creep.radius - 18);
+            t.text = displayName;
+            t.alpha = 0.8;
+          } else {
+            // Creep normal
+            g.beginFill(0xa1a1aa); // Cor cinza/amarelo neutro
+            g.lineStyle(1.5, 0xffffff, 0.6);
+            g.drawCircle(creep.x, creep.y, creep.radius);
+            g.endFill();
+
+            let t = textPool.get(id + '_text');
+            if (t) {
+              t.destroy();
+              textPool.delete(id + '_text');
+            }
+          }
+
+          // HP bar do creep
+          const barWidth = 30;
+          const barHeight = 4;
+          const barX = creep.x - barWidth / 2;
+          const barY = creep.y - creep.radius - 10;
+
+          g.lineStyle(0);
+          g.beginFill(0x1f2937);
+          g.drawRect(barX, barY, barWidth, barHeight);
           g.endFill();
 
-          // Nome de ilusão por cima
-          let t = textPool.get(id + '_text');
-          const displayName = `${ownerHero ? ownerHero.name : 'Hero'} (Ilusão)`;
-          if (!t) {
-            t = new PIXI.Text(displayName, {
-              fontFamily: 'Space Grotesk',
-              fontSize: 10,
-              fill: 0x93c5fd,
-              align: 'center',
-            });
-            t.anchor.set(0.5);
-            uiLayer.addChild(t);
-            textPool.set(id + '_text', t);
-          }
-          t.position.set(creep.x, creep.y - creep.radius - 18);
-          t.text = displayName;
-          t.alpha = 0.8;
-        } else {
-          // Creep normal
-          g.beginFill(0xa1a1aa); // Cor cinza/amarelo neutro
-          g.lineStyle(1.5, 0xffffff, 0.6);
-          g.drawCircle(creep.x, creep.y, creep.radius);
+          const hpPercentage = Math.max(0, creep.hp / creep.maxHp);
+          g.beginFill(0xeab308); // Amarelo/Dourado neutro
+          g.drawRect(barX, barY, barWidth * hpPercentage, barHeight);
           g.endFill();
+        });
+      }
 
-          let t = textPool.get(id + '_text');
-          if (t) {
-            t.destroy();
-            textPool.delete(id + '_text');
-          }
-        }
+      // 6.3 RENDERIZAR TORRES (usando cache)
+      const towersToRender = cachedTowersRef.current.length > 0
+        ? cachedTowersRef.current
+        : (state.towers || []);
 
-        // HP bar do creep
-        const barWidth = 30;
-        const barHeight = 4;
-        const barX = creep.x - barWidth / 2;
-        const barY = creep.y - creep.radius - 10;
-        
-        g.lineStyle(0);
-        g.beginFill(0x1f2937);
-        g.drawRect(barX, barY, barWidth, barHeight);
-        g.endFill();
-
-        const hpPercentage = Math.max(0, creep.hp / creep.maxHp);
-        g.beginFill(0xeab308); // Amarelo/Dourado neutro
-        g.drawRect(barX, barY, barWidth * hpPercentage, barHeight);
-        g.endFill();
-      });
-
-      // 6.3 RENDERIZAR TORRES
-      state.towers.forEach((tower: any) => {
+      towersToRender.forEach((tower: any) => {
         const id = tower.id;
         activeIds.add(id);
 
@@ -522,9 +856,9 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
         g.beginFill(color);
         g.lineStyle(4, tower.team === 1 ? 0x4ade80 : 0xef4444, 0.8);
         g.drawRect(
-          tower.x - GAME_SETTINGS.TOWERS.RADIUS, 
-          tower.y - GAME_SETTINGS.TOWERS.RADIUS, 
-          GAME_SETTINGS.TOWERS.RADIUS * 2, 
+          tower.x - GAME_SETTINGS.TOWERS.RADIUS,
+          tower.y - GAME_SETTINGS.TOWERS.RADIUS,
+          GAME_SETTINGS.TOWERS.RADIUS * 2,
           GAME_SETTINGS.TOWERS.RADIUS * 2
         );
         g.endFill();
@@ -563,35 +897,99 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       });
 
       // 6.4 RENDERIZAR PROJÉTEIS (Skillshots)
-      state.projectiles.forEach((proj: any) => {
-        const id = proj.id;
-        activeIds.add(id);
+      if (state.projectiles) {
+        state.projectiles.forEach((proj: any) => {
+          const id = proj.id;
+          activeIds.add(id);
 
-        let g = graphicsPool.get(id);
-        if (!g) {
-          g = new PIXI.Graphics();
-          projectilesLayer.addChild(g);
-          graphicsPool.set(id, g);
-        }
+          let g = graphicsPool.get(id);
+          if (!g) {
+            g = new PIXI.Graphics();
+            projectilesLayer.addChild(g);
+            graphicsPool.set(id, g);
+          }
 
-        g.clear();
-        // Brilho do projétil
-        const projColor = proj.color || 0xffd200;
-        g.beginFill(projColor, 0.4);
-        g.drawCircle(proj.position.x, proj.position.y, proj.radius + 4);
-        g.endFill();
-        // Centro do projétil
-        g.beginFill(0xffffff);
-        g.drawCircle(proj.position.x, proj.position.y, proj.radius);
-        g.endFill();
-      });
+          g.clear();
+          // Brilho do projétil
+          const projColor = proj.color || 0xffd200;
+          g.beginFill(projColor, 0.4);
+          g.drawCircle(proj.position.x, proj.position.y, proj.radius + 4);
+          g.endFill();
+          // Centro do projétil
+          g.beginFill(0xffffff);
+          g.drawCircle(proj.position.x, proj.position.y, proj.radius);
+          g.endFill();
+        });
+      }
 
-      // 6.5 Renderizar Efeitos Visuais (Level Up & Slash)
+      // 6.5 Renderizar Efeitos Visuais (Level Up & Slash) + FCT + Particles
       fxLayer.removeChildren();
       const fxGraphics = new PIXI.Graphics();
       fxLayer.addChild(fxGraphics);
 
-      const nowMs = Date.now();
+      // ── Particles ────────────────────────────────────────────────────
+      const dt = delta / 60; // seconds per frame
+      for (let i = particles.current.length - 1; i >= 0; i--) {
+        const p = particles.current[i];
+        if (!isHitStopped) {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.life -= dt;
+          p.vx *= 0.92; // friction
+          p.vy *= 0.92;
+        }
+        if (p.life <= 0) {
+          particles.current.splice(i, 1);
+          continue;
+        }
+        const lifeRatio = p.life / p.maxLife;
+        const radius = 4 * lifeRatio;
+        fxGraphics.beginFill(p.color, lifeRatio * 0.9);
+        fxGraphics.drawCircle(p.x, p.y, Math.max(0.5, radius));
+        fxGraphics.endFill();
+      }
+
+      // ── Floating Combat Text ─────────────────────────────────────────
+      for (let i = floatingTexts.current.length - 1; i >= 0; i--) {
+        const fct = floatingTexts.current[i];
+        const elapsed = nowMs - fct.createdAt;
+        if (elapsed >= fct.duration) {
+          // Clean up text object if it exists
+          const fctKey = `fct_${i}`;
+          const fctTxt = textPool.get(fctKey);
+          if (fctTxt) {
+            fctTxt.destroy();
+            textPool.delete(fctKey);
+          }
+          floatingTexts.current.splice(i, 1);
+          continue;
+        }
+
+        const progress = elapsed / fct.duration;
+        const floatY = fct.y - progress * 60; // float upward
+        const alpha = progress < 0.7 ? 1 : 1 - (progress - 0.7) / 0.3;
+
+        const fctKey = `fct_${i}`;
+        let fctTxt = textPool.get(fctKey);
+        if (!fctTxt) {
+          fctTxt = new PIXI.Text(fct.text, {
+            fontFamily: 'Space Grotesk',
+            fontSize: 16,
+            fontWeight: 'bold',
+            fill: fct.color,
+            stroke: 0x000000,
+            strokeThickness: 3,
+          });
+          fctTxt.anchor.set(0.5);
+          uiLayer.addChild(fctTxt);
+          textPool.set(fctKey, fctTxt);
+        }
+        fctTxt.text = fct.text;
+        fctTxt.style.fill = fct.color;
+        fctTxt.position.set(fct.x, floatY);
+        fctTxt.alpha = alpha;
+      }
+
       for (let i = visualEffects.length - 1; i >= 0; i--) {
         const fx = visualEffects[i];
         const elapsed = nowMs - fx.createdAt;
@@ -667,6 +1065,8 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
         const cleanKey = key.replace('_text', '');
         // Evita remover o texto de level up enquanto a animação está rodando
         if (key.includes('_lvlup_txt')) continue;
+        // Evita remover FCT textos enquanto existem floating texts
+        if (key.startsWith('fct_')) continue;
         if (!activeIds.has(cleanKey)) {
           t.destroy();
           textPool.delete(key);
@@ -686,11 +1086,15 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mousedown', handleWindowMouseDown);
       window.removeEventListener('keydown', handleWindowKeyDown);
-      
+      window.removeEventListener('keyup', handleWindowKeyUp);
+      window.removeEventListener('contextmenu', handleContextMenu);
+
+      clearInterval(minimapInterval);
+
       socket.off('game_state');
       socket.off('level_up');
       socket.off('unit_attacked');
-      
+
       if (appRef.current) {
         appRef.current.destroy(true, { children: true, texture: true, baseTexture: true });
         appRef.current = null;
@@ -706,9 +1110,27 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
       {/* Container onde o PixiJS irá montar seu Canvas */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
 
+      {/* ── Minimap (200x200 bottom-right) ── */}
+      <canvas
+        ref={minimapRef}
+        width={200}
+        height={200}
+        style={{
+          position: 'absolute',
+          bottom: '90px',
+          right: '16px',
+          border: '2px solid rgba(255,255,255,0.25)',
+          borderRadius: '4px',
+          zIndex: 40,
+          imageRendering: 'pixelated',
+          background: '#000',
+          boxShadow: '0 0 16px rgba(0,0,0,0.7)',
+        }}
+      />
+
       {/* Barra de Ações Rápidas de Skillshot (HUD sobreposta ao PixiJS) */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex space-x-4 pointer-events-none z-50">
-        
+
         {/* Habilidade Q */}
         <div className="group relative flex flex-col items-center bg-black/80 border border-zinc-800 px-4 py-3 rounded-2xl w-24 text-center pointer-events-auto cursor-pointer hover:border-shonen-primary/50 transition-colors">
           <span className="absolute -top-3 bg-shonen-primary text-black font-extrabold text-xs px-2 py-0.5 rounded-full shadow-glow">
