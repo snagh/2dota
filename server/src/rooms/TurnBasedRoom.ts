@@ -498,6 +498,14 @@ export class TurnBasedRoom extends BaseRoom {
       }
     } else {
       killer.kills++;
+      this.io.emit('kill_event', {
+        killerId: killer.id,
+        killerName: killer.username,
+        killerHeroId: killer.heroId,
+        victimId: deadUnit.id,
+        victimName: deadUnit.username,
+        victimHeroId: deadUnit.heroId
+      });
       this.killPlayerInternal(deadUnit);
 
       const shareRadius = 400;

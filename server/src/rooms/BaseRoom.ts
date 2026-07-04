@@ -497,6 +497,13 @@ export abstract class BaseRoom {
       player.ap = 0;
       player.mpPoints = 0;
     }
+
+    // Emite evento de abate para alimentar o feed de abates do cliente
+    this.io.emit('kill_event', {
+      victimId: player.id,
+      victimName: player.username,
+      victimHeroId: player.heroId
+    });
   }
 
   /**

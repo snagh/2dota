@@ -1,38 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Outfit:wght@400;600;700;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-abyss-dark: #0B0C10;
+  --color-chrono-silver: #C5C6C7;
+  --color-mana-spark: #66FCF1;
+  --color-radiant-amber: #F5A623;
+  --color-dread-crimson: #FF2E63;
+}
+
 @layer base {
   body {
     font-family: 'Outfit', sans-serif;
-    background-color: #0a0a0c;
+    background-color: var(--color-abyss-dark);
+    color: var(--color-chrono-silver);
   }
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 900;
+  }
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
   }
 }
 
-/* Efeito Glassmorphism Premium */
+/* Efeito Glassmorphism Premium da Paleta */
 .glass {
-  background: rgba(20, 20, 25, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 90, 31, 0.15);
+  background: rgba(11, 12, 16, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(197, 198, 199, 0.15);
 }
 
-/* Borda pulsante de energia */
-@keyframes pulse-energy {
+.glass-interactive {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-interactive:hover {
+  background: rgba(11, 12, 16, 0.95);
+  border-color: rgba(102, 252, 241, 0.4);
+  box-shadow: 0 0 15px rgba(102, 252, 241, 0.1);
+}
+
+/* Foco tático para acessibilidade */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-mana-spark);
+  outline-offset: 2px;
+}
+
+/* Elemento Assinatura: Moldura de Runa Cristalina (Ativa) */
+@keyframes crystal-pulse {
   0%, 100% {
-    border-color: rgba(255, 90, 31, 0.3);
-    box-shadow: 0 0 10px rgba(255, 90, 31, 0.1);
+    border-color: rgba(102, 252, 241, 0.4);
+    box-shadow: 0 0 8px rgba(102, 252, 241, 0.15), inset 0 0 8px rgba(102, 252, 241, 0.05);
   }
   50% {
-    border-color: rgba(255, 210, 0, 0.6);
-    box-shadow: 0 0 20px rgba(255, 210, 0, 0.3);
+    border-color: rgba(102, 252, 241, 0.95);
+    box-shadow: 0 0 18px rgba(102, 252, 241, 0.5), inset 0 0 12px rgba(102, 252, 241, 0.2);
   }
 }
 
-.energy-border {
-  border: 2px solid rgba(255, 90, 31, 0.3);
-  animation: pulse-energy 3s infinite;
+.crystal-frame {
+  border: 2px solid rgba(102, 252, 241, 0.4);
+  animation: crystal-pulse 2.5s infinite;
 }
+
+/* Runa Cristalina de Cooldown / Inativa */
+@keyframes crimson-pulse {
+  0%, 100% {
+    border-color: rgba(255, 46, 99, 0.2);
+    box-shadow: 0 0 6px rgba(255, 46, 99, 0.1);
+  }
+  50% {
+    border-color: rgba(255, 46, 99, 0.7);
+    box-shadow: 0 0 12px rgba(255, 46, 99, 0.3);
+  }
+}
+
+.crimson-frame {
+  border: 2px solid rgba(255, 46, 99, 0.2);
+  animation: crimson-pulse 3s infinite;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-abyss-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(197, 198, 199, 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-mana-spark);
+}
+

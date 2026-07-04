@@ -137,79 +137,121 @@ export default function App() {
 
     const activeHeroDef = HERO_CATALOG[selectedHeroId] || HERO_CATALOG.axe;
 
+    // Determina o papel do herói de acordo com seu atributo principal
+    const getHeroRole = (attr: string) => {
+      if (attr === 'STR') return 'Tanque Iniciador / Linha de Frente';
+      if (attr === 'AGI') return 'Carregador Ágil / DPS Físico';
+      return 'Conjurador de Batalha / Suporte Tático';
+    };
+
+    if (!connected) {
+      return (
+        <div className="flex h-screen w-screen flex-col items-center justify-center bg-[#0B0C10] px-6 select-none">
+          <div className="glass max-w-md w-full rounded-2xl p-8 border border-zinc-800 text-center space-y-6 shadow-2xl">
+            <div className="h-16 w-16 border-4 border-t-[#66FCF1] border-zinc-900 rounded-full animate-spin mx-auto" />
+            <div className="space-y-2">
+              <h2 className="text-xl font-black text-white tracking-widest font-mono">2D.OTA</h2>
+              <p className="text-zinc-400 text-xs font-semibold leading-relaxed">
+                Estabelecendo conexão cristalina com o campo de batalha. Aguarde...
+              </p>
+            </div>
+            <div className="text-[10px] text-zinc-600 font-mono">
+              IP: localhost:3001
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-gradient-to-br from-shonen-dark via-[#0c0c12] to-[#120b07] px-6 overflow-y-auto py-10 select-none">
-        <div className="glass max-w-5xl w-full rounded-3xl p-8 shadow-2xl energy-border grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
+      <div className="flex min-h-screen w-screen items-center justify-center bg-gradient-to-b from-[#0B0C10] via-[#0f1115] to-[#0B0C10] px-4 py-8 overflow-y-auto select-none">
+        <div className="glass max-w-6xl w-full rounded-3xl p-6 md:p-8 shadow-2xl border border-zinc-800/80 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           
-          {/* Coluna Esquerda: Formulário e Informações do Herói */}
-          <div className="md:col-span-5 flex flex-col justify-between space-y-6">
-            <div>
-              <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-shonen-primary to-shonen-secondary tracking-wider text-left mb-1 font-sans">
-                2D.OTA
-              </h1>
-              <p className="text-zinc-400 text-xs font-bold uppercase tracking-wider text-left mb-6">Mini Arena Multiplayer</p>
+          {/* Coluna Esquerda: Configurações e Detalhes do Herói */}
+          <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b border-zinc-900 pb-4">
+                <div>
+                  <h1 className="text-3xl font-black text-white tracking-widest font-mono">
+                    2D.OTA
+                  </h1>
+                  <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-0.5">Mini Arena de Campeões</p>
+                </div>
+                <div className="flex items-center space-x-2 bg-[#121218] border border-zinc-900 px-3 py-1.5 rounded-lg">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">Servidor Online</span>
+                </div>
+              </div>
 
               <form onSubmit={handleJoin} className="space-y-4">
                 {/* Nome do Jogador */}
                 <div>
-                  <label className="block text-left text-zinc-400 text-[10px] font-bold uppercase tracking-widest mb-1.5">
-                    Nome do Jogador
+                  <label className="block text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest mb-2">
+                    Identidade na Arena (Apelido)
                   </label>
                   <input
                     type="text"
-                    placeholder="Apelido..."
+                    placeholder="Ex: Mogul_Khan"
                     value={username}
                     onChange={e => setUsername(e.target.value)}
                     maxLength={14}
                     required
-                    className="w-full bg-[#161620] border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-shonen-primary transition-all text-sm font-semibold"
+                    className="w-full bg-[#121218] border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#66FCF1] focus:ring-1 focus:ring-[#66FCF1] transition-all text-sm font-semibold focus-ring"
                   />
                 </div>
 
-                {/* Modo de Jogo */}
+                {/* Seleção de Modo */}
                 <div>
-                  <label className="block text-left text-zinc-400 text-[10px] font-bold uppercase tracking-widest mb-1.5">
+                  <label className="block text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest mb-2">
                     Modo de Arena
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
                       type="button"
                       onClick={() => setSelectedMode('NORMAL')}
-                      className={`py-2 rounded-lg border font-black text-[10px] uppercase tracking-wider transition-all ${
+                      className={`p-3.5 rounded-xl border text-left transition-all focus-ring flex flex-col justify-between ${
                         selectedMode === 'NORMAL'
-                          ? 'border-shonen-primary bg-shonen-primary/10 text-shonen-primary shadow-glow'
-                          : 'border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700'
+                          ? 'border-[#66FCF1] bg-[#66FCF1]/5 text-white shadow-[0_0_15px_rgba(102,252,241,0.05)]'
+                          : 'border-zinc-800 bg-[#121218]/40 text-zinc-400 hover:border-zinc-700'
                       }`}
                     >
-                      ⚔️ Tempo Real
+                      <span className="font-extrabold text-xs tracking-wider uppercase mb-1 block">⚔️ Tempo Real</span>
+                      <span className="text-[10px] text-zinc-500 font-medium leading-relaxed">
+                        Partida clássica de ação rápida, micro-gerenciamento e reflexos instantâneos.
+                      </span>
                     </button>
+
                     <button
                       type="button"
                       onClick={() => setSelectedMode('TURN_BASED')}
-                      className={`py-2 rounded-lg border font-black text-[10px] uppercase tracking-wider transition-all ${
+                      className={`p-3.5 rounded-xl border text-left transition-all focus-ring flex flex-col justify-between ${
                         selectedMode === 'TURN_BASED'
-                          ? 'border-[#8257e5] bg-[#8257e5]/10 text-[#8257e5] shadow-glow'
-                          : 'border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700'
+                          ? 'border-[#FF2E63] bg-[#FF2E63]/5 text-white shadow-[0_0_15px_rgba(255,46,99,0.05)]'
+                          : 'border-zinc-800 bg-[#121218]/40 text-zinc-400 hover:border-zinc-700'
                       }`}
                     >
-                      ⏳ Turno Tático
+                      <span className="font-extrabold text-xs tracking-wider uppercase mb-1 block">⏳ Turno Tático</span>
+                      <span className="text-[10px] text-zinc-500 font-medium leading-relaxed">
+                        Combate estratégico por turnos. Planeje cada movimento usando pontos de ação (PA/PM).
+                      </span>
                     </button>
                   </div>
                 </div>
               </form>
             </div>
 
-            {/* Painel do Herói Selecionado */}
-            <div className="bg-[#121218] border border-zinc-800 rounded-2xl p-4 text-left space-y-3">
+            {/* Painel Detalhado do Herói Selecionado (Visual Premium) */}
+            <div className="bg-[#121218] border border-zinc-800 rounded-2xl p-5 text-left space-y-4">
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="font-extrabold text-white text-lg tracking-wide uppercase">{activeHeroDef.name}</h3>
-                  <span className="text-[10px] text-zinc-400 font-medium italic">{activeHeroDef.title}</span>
+                  <h3 className="font-black text-white text-xl tracking-wide uppercase">{activeHeroDef.name}</h3>
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mt-0.5">{activeHeroDef.title}</span>
+                  <span className="text-[9px] text-[#66FCF1] font-bold uppercase tracking-wider block mt-1">{getHeroRole(activeHeroDef.attribute)}</span>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${
-                  activeHeroDef.attribute === 'STR' ? 'bg-red-950 text-red-400 border border-red-800' :
-                  activeHeroDef.attribute === 'AGI' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
-                  'bg-sky-950 text-sky-400 border border-sky-800'
+                <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border ${
+                  activeHeroDef.attribute === 'STR' ? 'bg-red-950/40 text-[#FF2E63] border-[#FF2E63]/30' :
+                  activeHeroDef.attribute === 'AGI' ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/30' :
+                  'bg-sky-950/40 text-[#66FCF1] border-[#66FCF1]/30'
                 }`}>
                   {activeHeroDef.attribute === 'STR' ? '🔴 Força' :
                    activeHeroDef.attribute === 'AGI' ? '🟢 Agilidade' :
@@ -218,21 +260,30 @@ export default function App() {
               </div>
 
               {/* Status do Herói */}
-              <div className="grid grid-cols-3 gap-2 text-[10px] text-zinc-300 font-bold border-t border-b border-zinc-900 py-2">
-                <div>❤️ Vida: <span className="text-zinc-100">{activeHeroDef.baseHp}</span></div>
-                <div>🧪 Mana: <span className="text-zinc-100">{activeHeroDef.baseMp}</span></div>
-                <div>🏃 Speed: <span className="text-zinc-100">{activeHeroDef.speed}</span></div>
+              <div className="grid grid-cols-3 gap-2 text-[10px] text-zinc-400 font-mono border-t border-b border-zinc-900 py-3">
+                <div>❤️ VIDA: <span className="text-white font-bold">{activeHeroDef.baseHp}</span></div>
+                <div>🧪 MANA: <span className="text-white font-bold">{activeHeroDef.baseMp}</span></div>
+                <div>🏃 VEL: <span className="text-white font-bold">{activeHeroDef.speed}</span></div>
               </div>
 
-              {/* Habilidades do Herói */}
-              <div className="space-y-2 text-xs">
-                <div>
-                  <p className="font-bold text-shonen-primary">⚡ Q: {activeHeroDef.abilities.Q.name}</p>
-                  <p className="text-[10px] text-zinc-400">Tipo: {activeHeroDef.abilities.Q.behavior} | Dano: {activeHeroDef.abilities.Q.damage} | CD: {activeHeroDef.abilities.Q.cooldown}s</p>
-                </div>
-                <div>
-                  <p className="font-bold text-shonen-secondary">⚡ W: {activeHeroDef.abilities.W.name}</p>
-                  <p className="text-[10px] text-zinc-400">Tipo: {activeHeroDef.abilities.W.behavior} | Dano: {activeHeroDef.abilities.W.damage} | CD: {activeHeroDef.abilities.W.cooldown}s</p>
+              {/* Habilidades do Herói com Detalhes Completos */}
+              <div className="space-y-3.5">
+                <p className="text-zinc-500 font-extrabold uppercase text-[9px] tracking-wider mb-1">Grade de Habilidades de Combate</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.entries(activeHeroDef.abilities).map(([key, ability]: [string, any]) => (
+                    <div key={key} className="bg-[#0B0C10] border border-zinc-800/80 rounded-xl p-3 space-y-1 hover:border-zinc-700 transition-all">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] bg-zinc-800 text-zinc-300 font-mono font-bold px-1.5 py-0.5 rounded uppercase">{key}</span>
+                        <span className="text-[9px] text-zinc-500 font-mono">Mana: {ability.manaCost}</span>
+                      </div>
+                      <p className="font-extrabold text-[11px] text-white truncate">{ability.name}</p>
+                      <p className="text-[9px] text-zinc-400 leading-normal line-clamp-2 h-7">{ability.description}</p>
+                      <div className="flex justify-between text-[8px] font-mono text-zinc-500 border-t border-zinc-900 pt-1 mt-1">
+                        <span>Dano: {ability.damage || '0'}</span>
+                        <span>CD: {ability.cooldown}s</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -240,78 +291,87 @@ export default function App() {
             <button
               onClick={handleJoin}
               disabled={!connected || !username.trim()}
-              className="w-full py-3.5 rounded-xl font-extrabold bg-gradient-to-r from-shonen-primary to-shonen-secondary text-black hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 disabled:pointer-events-none uppercase text-xs tracking-widest shadow-lg"
+              className="w-full py-4 rounded-xl font-black bg-gradient-to-r from-[#66FCF1] to-[#3b82f6] text-black hover:opacity-95 active:scale-[0.99] transition-all disabled:opacity-30 disabled:pointer-events-none uppercase text-xs tracking-widest shadow-lg focus-ring"
             >
-              {connected ? 'ENTRAR NA ARENA ⚔️' : 'CONECTANDO AO SERVIDOR...'}
+              ENTRAR NA ARENA ⚔️
             </button>
           </div>
 
           {/* Coluna Direita: Grade de Escolha de Heróis (30 slots) */}
-          <div className="md:col-span-7 flex flex-col justify-between space-y-4">
-            {/* Abas de Seleção */}
-            <div className="grid grid-cols-3 gap-2 bg-[#121218]/90 border border-zinc-800 rounded-xl p-1">
-              <button
-                type="button"
-                onClick={() => setSelectedTab('STR')}
-                className={`py-2 rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all ${
-                  selectedTab === 'STR'
-                    ? 'bg-red-700/20 text-red-400 border border-red-700/40 shadow-glow'
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                🔴 Força
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedTab('AGI')}
-                className={`py-2 rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all ${
-                  selectedTab === 'AGI'
-                    ? 'bg-emerald-700/20 text-emerald-400 border border-emerald-700/40 shadow-glow'
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                🟢 Agilidade
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedTab('INT')}
-                className={`py-2 rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all ${
-                  selectedTab === 'INT'
-                    ? 'bg-sky-700/20 text-sky-400 border border-sky-700/40 shadow-glow'
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                🔵 Inteligência
-              </button>
-            </div>
-
-            {/* Grade de Heróis */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto max-h-[360px] pr-2 scrollbar-thin scrollbar-thumb-zinc-800">
-              {currentTabHeroes.map(([heroId, def]) => {
-                const isSelected = selectedHeroId === heroId;
-                return (
+          <div className="lg:col-span-7 flex flex-col justify-between space-y-6">
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <h2 className="text-md font-black text-white uppercase tracking-wider">Escolha seu Campeão</h2>
+                
+                {/* Abas de Atributo */}
+                <div className="flex bg-[#121218] border border-zinc-900 rounded-xl p-1 w-full sm:w-auto">
                   <button
-                    key={heroId}
                     type="button"
-                    onClick={() => setSelectedHeroId(heroId)}
-                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                      isSelected
-                        ? selectedTab === 'STR' ? 'border-red-500 bg-red-950/20 shadow-red-500/20 shadow-md' :
-                          selectedTab === 'AGI' ? 'border-emerald-500 bg-emerald-950/20 shadow-emerald-500/20 shadow-md' :
-                          'border-sky-500 bg-sky-950/20 shadow-sky-500/20 shadow-md'
-                        : 'border-zinc-800/80 bg-zinc-900/30 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                    onClick={() => setSelectedTab('STR')}
+                    className={`flex-1 sm:flex-none px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all focus-ring ${
+                      selectedTab === 'STR'
+                        ? 'bg-red-700/10 text-[#FF2E63] border border-red-700/20'
+                        : 'text-zinc-500 hover:text-zinc-300'
                     }`}
                   >
-                    <span className="font-extrabold text-sm block tracking-wide truncate">{def.name}</span>
-                    <span className="text-[9px] text-zinc-500 font-medium truncate block">{def.title}</span>
+                    🔴 Força
                   </button>
-                );
-              })}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTab('AGI')}
+                    className={`flex-1 sm:flex-none px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all focus-ring ${
+                      selectedTab === 'AGI'
+                        ? 'bg-emerald-700/10 text-emerald-400 border border-emerald-700/20'
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    🟢 Agilidade
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTab('INT')}
+                    className={`flex-1 sm:flex-none px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all focus-ring ${
+                      selectedTab === 'INT'
+                        ? 'bg-sky-700/10 text-[#66FCF1] border border-sky-700/20'
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    🔵 Inteligência
+                  </button>
+                </div>
+              </div>
+
+              {/* Grade de Seleção dos Heróis */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto max-h-[460px] pr-2 scrollbar-thin scrollbar-thumb-zinc-800">
+                {currentTabHeroes.map(([heroId, def]) => {
+                  const isSelected = selectedHeroId === heroId;
+                  return (
+                    <button
+                      key={heroId}
+                      type="button"
+                      onClick={() => setSelectedHeroId(heroId)}
+                      className={`p-3.5 rounded-xl border text-left flex flex-col justify-between transition-all focus-ring h-20 ${
+                        isSelected
+                          ? selectedTab === 'STR' ? 'border-[#FF2E63] bg-[#FF2E63]/5 shadow-[0_0_12px_rgba(255,46,99,0.1)]' :
+                            selectedTab === 'AGI' ? 'border-emerald-500 bg-emerald-950/20 shadow-[0_0_12px_rgba(16,185,129,0.1)]' :
+                            'border-[#66FCF1] bg-[#66FCF1]/5 shadow-[0_0_12px_rgba(102,252,241,0.1)]'
+                          : 'border-zinc-800 bg-[#121218]/30 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <span className="font-extrabold text-xs block tracking-wide truncate w-full">{def.name}</span>
+                      <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider truncate block w-full mt-1">{def.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="flex items-center justify-between text-[10px] text-zinc-500 border-t border-zinc-900 pt-3">
-              <span>* Escolha seu herói e clique no botão para jogar.</span>
-              <span className={`h-2.5 w-2.5 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+            <div className="flex items-center justify-between text-[10px] text-zinc-500 border-t border-zinc-900 pt-4">
+              <span>* Selecione seu herói, escolha o modo e pressione o botão para conectar ao lobby da arena.</span>
+              <div className="flex items-center space-x-1.5">
+                <span className={`h-2 w-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                <span className="font-mono">{connected ? 'CONECTADO' : 'DESCONECTADO'}</span>
+              </div>
             </div>
           </div>
 
