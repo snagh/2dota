@@ -41,6 +41,36 @@ export class RealTimeRoom extends BaseRoom {
     for (const player of this.players.values()) {
       if (player.hp <= 0) continue;
 
+      // 1.0 Postura Agressiva: Foca inimigos próximos se estiver parado (Auto-Acquire Aggro)
+      if (!player.targetId && (!player.path || player.path.length === 0)) {
+        let nearestEnemy: any = null;
+        let bestDist = player.attackRange + 120;
+
+        for (const creep of this.creeps.values()) {
+          if (creep.hp > 0) {
+            const dist = this.getDistance(player, creep);
+            if (dist < bestDist) {
+              bestDist = dist;
+              nearestEnemy = creep;
+            }
+          }
+        }
+
+        for (const p of this.players.values()) {
+          if (p.id !== player.id && p.hp > 0 && p.team !== player.team) {
+            const dist = this.getDistance(player, p);
+            if (dist < bestDist) {
+              bestDist = dist;
+              nearestEnemy = p;
+            }
+          }
+        }
+
+        if (nearestEnemy) {
+          player.targetId = nearestEnemy.id;
+        }
+      }
+
       // 1.1 Se o jogador tem um alvo focado (targetId)
       if (player.targetId) {
         let targetUnit: any = this.creeps.get(player.targetId) || this.players.get(player.targetId);
@@ -344,7 +374,7 @@ export class RealTimeRoom extends BaseRoom {
 
     // 1. Procura se há um alvo (creep ou player inimigo) próximo ao local do clique
     let foundTarget: any = null;
-    const clickRadius = 32;
+    const clickRadius = 64;
 
     for (const creep of this.creeps.values()) {
       if (creep.hp > 0 && this.getDistance({ x, y }, creep) < clickRadius) {

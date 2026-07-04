@@ -342,7 +342,7 @@ export class TurnBasedRoom extends BaseRoom {
 
     // 1. Procura se há um alvo inimigo focado pelo clique
     let targetUnit: any = null;
-    const clickRadius = 32;
+    const clickRadius = 64;
 
     for (const creep of this.creeps.values()) {
       if (creep.hp > 0 && Math.sqrt(Math.pow(creep.x - x, 2) + Math.pow(creep.y - y, 2)) < clickRadius) {

@@ -87,6 +87,27 @@ export function initializeObstacles() {
       }
     }
   });
+
+  // 4. Limpa áreas ao redor dos campos de creeps neutros na selva para que fiquem acessíveis
+  const camps = [
+    { x: 800, y: 700 },
+    { x: 1600, y: 1700 },
+    { x: 600, y: 1400 },
+    { x: 1800, y: 1000 }
+  ];
+  camps.forEach(camp => {
+    const col = Math.floor(camp.x / TILE_SIZE);
+    const row = Math.floor(camp.y / TILE_SIZE);
+    for (let dr = -3; dr <= 3; dr++) {
+      for (let dc = -3; dc <= 3; dc++) {
+        const nr = row + dr;
+        const nc = col + dc;
+        if (nr >= 0 && nr < GRID_ROWS && nc >= 0 && nc < GRID_COLS) {
+          obstacleGrid[nr][nc] = 0;
+        }
+      }
+    }
+  });
 }
 
 // Inicializa a grade assim que o módulo é carregado
@@ -175,9 +196,14 @@ export function findPath(start: Vector2D, target: Vector2D): Vector2D[] {
   openList.push(startNode);
 
   while (openList.length > 0) {
-    // Ordena pelo menor custo F
-    openList.sort((a, b) => a.f - b.f);
-    const current = openList.shift()!;
+    // Busca o índice do nó com menor custo F (Varredura linear O(N) de alta performance)
+    let minIndex = 0;
+    for (let i = 1; i < openList.length; i++) {
+      if (openList[i].f < openList[minIndex].f) {
+        minIndex = i;
+      }
+    }
+    const current = openList.splice(minIndex, 1)[0];
 
     closedSet.add(`${current.col},${current.row}`);
 

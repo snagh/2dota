@@ -54,9 +54,9 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     appRef.current = app;
     containerRef.current.appendChild(app.view as HTMLCanvasElement);
 
-    // Desabilita menu de contexto (clique direito padrão)
+    // Desabilita menu de contexto (clique direito padrão) globalmente
     const handleContextMenu = (e: MouseEvent) => e.preventDefault();
-    (app.view as HTMLCanvasElement).addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('contextmenu', handleContextMenu);
 
     // 2. Cria contêineres para o Mundo e Câmera
     const worldContainer = new PIXI.Container();
