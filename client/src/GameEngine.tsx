@@ -451,6 +451,38 @@ export default function GameEngine({ socket, username, onUpdatePlayerStats }: Ga
     };
 
     const handleWindowKeyDown = (e: KeyboardEvent) => {
+      // Prevenir atalhos indesejados do navegador enquanto a partida está ativa
+      const isCtrl = e.ctrlKey || e.metaKey;
+      const keyUpper = e.key.toUpperCase();
+
+      if (e.key === 'F5' || (isCtrl && keyUpper === 'R')) {
+        e.preventDefault();
+        return;
+      }
+      if (isCtrl && (keyUpper === 'S' || keyUpper === 'P' || keyUpper === 'D' || keyUpper === 'G' || keyUpper === 'F')) {
+        e.preventDefault();
+        return;
+      }
+
+      // Atalhos de "subir level da skill" (Ctrl + Q/W/E/R no Dota 2)
+      if (isCtrl && (keyUpper === 'Q' || keyUpper === 'W' || keyUpper === 'E' || keyUpper === 'R')) {
+        e.preventDefault();
+        const lp = gameStateRef.current?.players.find((p: any) => p.id === localPlayerId.current);
+        if (lp) {
+          const nextId = fctIndexRef.current++;
+          floatingTexts.current.push({
+            id: nextId,
+            text: "Dano & Atributos sobem automaticamente!",
+            x: predictedPosRef.current ? predictedPosRef.current.x : lp.x,
+            y: (predictedPosRef.current ? predictedPosRef.current.y : lp.y) - 40,
+            createdAt: Date.now(),
+            duration: 1500,
+            color: 0x66FCF1 // Ciano (Mana spark)
+          });
+        }
+        return;
+      }
+
       const key = e.key.toUpperCase() as 'Q' | 'W' | 'E' | 'R';
       if (key === 'Q' || key === 'W' || key === 'E' || key === 'R') {
         // Set holdingKey for range preview BEFORE sending cast
